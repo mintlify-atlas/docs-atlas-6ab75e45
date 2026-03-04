@@ -1,0 +1,190 @@
+{
+  "projectType": "api-service",
+  "projectName": "Cultus",
+  "projectDescription": "Backend API service for Linkvite, a bookmark management and collaboration platform.",
+  "theme": "aspen",
+  "primaryColor": "#2563eb",
+  "lightColor": "#3b82f6",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "auth/overview",
+              "auth/jwt-tokens",
+              "auth/oauth",
+              "auth/api-keys"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/bookmarks",
+              "concepts/collections",
+              "concepts/users",
+              "concepts/permissions"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment",
+              "configuration/database",
+              "configuration/storage",
+              "configuration/queue"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/production",
+              "deployment/monitoring"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/login",
+              "api/auth/signup",
+              "api/auth/refresh-token",
+              "api/auth/otp"
+            ]
+          },
+          {
+            "group": "Bookmarks",
+            "pages": [
+              "api/bookmarks/create",
+              "api/bookmarks/get",
+              "api/bookmarks/update",
+              "api/bookmarks/delete",
+              "api/bookmarks/star"
+            ]
+          },
+          {
+            "group": "Collections",
+            "pages": [
+              "api/collections/create",
+              "api/collections/get",
+              "api/collections/update",
+              "api/collections/delete",
+              "api/collections/members"
+            ]
+          },
+          {
+            "group": "Users",
+            "pages": [
+              "api/users/get",
+              "api/users/update",
+              "api/users/storage",
+              "api/users/sync"
+            ]
+          },
+          {
+            "group": "Comments",
+            "pages": [
+              "api/comments/create",
+              "api/comments/get",
+              "api/comments/delete",
+              "api/comments/like"
+            ]
+          },
+          {
+            "group": "Search",
+            "pages": [
+              "api/search/bookmarks",
+              "api/search/tenor",
+              "api/search/unsplash"
+            ]
+          },
+          {
+            "group": "RSS Feeds",
+            "pages": [
+              "api/rss/create",
+              "api/rss/get",
+              "api/rss/update",
+              "api/rss/delete"
+            ]
+          },
+          {
+            "group": "Reminders",
+            "pages": [
+              "api/reminders/create",
+              "api/reminders/get",
+              "api/reminders/update",
+              "api/reminders/delete"
+            ]
+          },
+          {
+            "group": "OAuth",
+            "pages": [
+              "api/oauth/authorize",
+              "api/oauth/token",
+              "api/oauth/apps"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/parser/parse-link",
+              "api/parser/import",
+              "api/files/upload",
+              "api/health/check"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "JWT-based authentication with OAuth support",
+    "Bookmark management with tags and collections",
+    "Real-time collaboration with WebSocket support",
+    "File storage and management with AWS S3",
+    "RSS feed aggregation and management",
+    "Full-text search capabilities",
+    "Background job processing with NATS",
+    "Rate limiting and security middleware",
+    "Stripe payment integration",
+    "QR code authentication"
+  ],
+  "publicApiSurface": [
+    "POST /auth/login - User login",
+    "POST /auth/signup - User registration",
+    "POST /auth/token/refresh - Refresh access token",
+    "GET /bookmarks - List bookmarks",
+    "POST /bookmarks - Create bookmark",
+    "GET /bookmarks/:id - Get bookmark details",
+    "PATCH /bookmarks/:id - Update bookmark",
+    "DELETE /bookmarks/:id - Delete bookmark",
+    "GET /collections - List collections",
+    "POST /collections - Create collection",
+    "GET /collections/:id - Get collection details",
+    "POST /collections/:id/send-invite - Invite user to collection",
+    "GET /user - Get current user",
+    "PATCH /user - Update user profile",
+    "GET /search - Search bookmarks",
+    "POST /parser - Parse URL metadata",
+    "GET /rss-feeds - List RSS feeds",
+    "POST /rss-feeds - Subscribe to RSS feed",
+    "GET /oauth/authorize - OAuth authorization endpoint",
+    "POST /oauth/authorize/decision - OAuth decision endpoint"
+  ]
+}

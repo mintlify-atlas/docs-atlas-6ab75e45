@@ -1,0 +1,223 @@
+---
+title: "Get Collections"
+description: "Retrieve collections and collection details"
+---
+
+## Get Single Collection
+
+<api>GET /collections/:id</api>
+
+Retrieve detailed information about a specific collection.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Collection ID (prefixed with `col_`)
+</ParamField>
+
+### Response
+
+<ResponseField name="collection" type="object">
+  The collection object with full details
+  
+  <Expandable title="properties">
+    <ResponseField name="id" type="string">
+      Unique identifier for the collection
+    </ResponseField>
+    
+    <ResponseField name="user_id" type="string">
+      ID of the collection owner
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Collection name
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Collection description
+    </ResponseField>
+    
+    <ResponseField name="status" type="string">
+      Collection status (`active` or `inactive`)
+    </ResponseField>
+    
+    <ResponseField name="is_private" type="boolean">
+      Whether the collection is private
+    </ResponseField>
+    
+    <ResponseField name="allow_public_join" type="boolean">
+      Whether public users can join this collection
+    </ResponseField>
+    
+    <ResponseField name="thumbnail" type="string">
+      URL to collection cover image
+    </ResponseField>
+    
+    <ResponseField name="icon" type="string">
+      URL to collection icon
+    </ResponseField>
+    
+    <ResponseField name="views" type="integer">
+      Number of times the collection has been viewed
+    </ResponseField>
+    
+    <ResponseField name="parent_id" type="string">
+      Parent collection ID if nested
+    </ResponseField>
+    
+    <ResponseField name="updated_by_id" type="string">
+      ID of the user who last updated the collection
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      Timestamp when the collection was created
+    </ResponseField>
+    
+    <ResponseField name="updated_at" type="string">
+      Timestamp when the collection was last updated
+    </ResponseField>
+    
+    <ResponseField name="last_opened_at" type="string">
+      Timestamp when the collection was last opened
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="owner_id" type="string">
+  Public ID of the collection owner
+</ResponseField>
+
+<ResponseField name="owner_name" type="string">
+  Full name of the collection owner
+</ResponseField>
+
+<ResponseField name="owner_username" type="string">
+  Username of the collection owner
+</ResponseField>
+
+<ResponseField name="owner_avatar" type="string">
+  Avatar URL of the collection owner
+</ResponseField>
+
+<ResponseField name="bookmarks_count" type="integer">
+  Number of active bookmarks in this collection
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  User's role in the collection (`admin` or `viewer`)
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://api.cultus.app/collections/col_xyz789 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Success Response
+{
+  "collection": {
+    "id": "col_xyz789",
+    "user_id": "usr_abc123",
+    "name": "My Reading List",
+    "description": "Articles to read later",
+    "status": "active",
+    "is_private": false,
+    "allow_public_join": true,
+    "thumbnail": "https://storage.cultus.app/covers/col_xyz789.jpg",
+    "icon": "https://assets.cultus.app/icons/folders/icons8-folder-500.png",
+    "views": 42,
+    "parent_id": null,
+    "updated_by_id": "usr_abc123",
+    "created_at": "2024-03-01T12:00:00Z",
+    "updated_at": "2024-03-04T12:00:00Z",
+    "last_opened_at": "2024-03-04T10:30:00Z"
+  },
+  "owner_id": "usr_abc123",
+  "owner_name": "John Doe",
+  "owner_username": "johndoe",
+  "owner_avatar": "https://avatars.cultus.app/usr_abc123",
+  "bookmarks_count": 15,
+  "role": "admin"
+}
+```
+
+```json Error Response (Not Found)
+{
+  "error": {
+    "message": "collection not found",
+    "status": 404
+  }
+}
+```
+</ResponseExample>
+
+## Get All Collections
+
+<api>GET /collections</api>
+
+Retrieve all collections the authenticated user has access to (owned or member of).
+
+### Response
+
+<ResponseField name="collections" type="array">
+  Array of collection objects the user owns or is a member of
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://api.cultus.app/collections \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Success Response
+[
+  {
+    "id": "col_xyz789",
+    "user_id": "usr_abc123",
+    "name": "My Reading List",
+    "description": "Articles to read later",
+    "status": "active",
+    "is_private": false,
+    "allow_public_join": true,
+    "thumbnail": "https://storage.cultus.app/covers/col_xyz789.jpg",
+    "icon": "https://assets.cultus.app/icons/folders/icons8-folder-500.png",
+    "views": 42,
+    "parent_id": null,
+    "updated_by_id": "usr_abc123",
+    "created_at": "2024-03-01T12:00:00Z",
+    "updated_at": "2024-03-04T12:00:00Z",
+    "last_opened_at": "2024-03-04T10:30:00Z",
+    "role": "admin"
+  },
+  {
+    "id": "col_def456",
+    "user_id": "usr_xyz456",
+    "name": "Shared Resources",
+    "description": "Team bookmarks",
+    "status": "active",
+    "is_private": true,
+    "allow_public_join": false,
+    "thumbnail": "",
+    "icon": "https://assets.cultus.app/icons/folders/icons8-folder-500.png",
+    "views": 28,
+    "parent_id": null,
+    "updated_by_id": "usr_xyz456",
+    "created_at": "2024-02-15T09:00:00Z",
+    "updated_at": "2024-03-02T14:20:00Z",
+    "last_opened_at": "2024-03-03T16:45:00Z",
+    "role": "viewer"
+  }
+]
+```
+</ResponseExample>
+
+## Notes
+
+- Accessing a collection increments its view count and updates `last_opened_at`
+- Collections are cached for performance
+- Users can only access collections they own or are members of (unless the collection is public)
+- The `role` field indicates the user's permission level in the collection

@@ -1,0 +1,95 @@
+---
+title: "Upload File Bookmark"
+description: "Upload files as bookmarks to Cultus"
+---
+
+## POST /bookmarks/file
+
+Upload a file and create a bookmark for it. Files are stored securely and can be accessed later.
+
+### Authentication
+
+Requires authentication with `bookmark:write` scope.
+
+### Request
+
+Multipart form data upload.
+
+**Note**: This endpoint is part of the bookmarks API. See the bookmarks documentation for complete details on file uploads, including:
+
+- Supported file types
+- File size limits
+- Storage quotas
+- File access and sharing
+- Metadata extraction
+
+### File Access
+
+### GET /files/:id
+
+Access a file bookmark's content.
+
+**Authentication**: Requires authentication with `file:read` scope
+
+**Path Parameters**:
+- `id` (string): Bookmark ID with `bm_` prefix
+
+**Query Parameters**:
+- `isClient` (boolean): Set to `true` to get a signed URL (24h expiry) instead of redirect (15min expiry)
+
+**Response**:
+- By default: Redirects to signed S3 URL (15 minute expiry)
+- With `isClient=true`: Returns JSON with signed URL (24 hour expiry)
+
+---
+
+### POST /files/:id/share
+
+Generate a shareable link for a file bookmark.
+
+**Authentication**: Requires `file:read` scope
+
+**Path Parameters**:
+- `id` (string): Bookmark ID with `bm_` prefix
+
+**Query Parameters**:
+- `expireIn` (integer): Link expiration in minutes (minimum 5, default 15)
+
+**Response**:
+```json
+{
+  "message": "share link created",
+  "data": {
+    "link": "https://...",
+    "expires": 15
+  }
+}
+```
+
+### Example Requests
+
+**Access file**:
+```bash
+curl https://api.cultus.app/files/bm_abc123 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Get client URL**:
+```bash
+curl https://api.cultus.app/files/bm_abc123?isClient=true \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Share file**:
+```bash
+curl -X POST https://api.cultus.app/files/bm_abc123/share?expireIn=60 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Security Notes
+
+- Files are stored in private S3 buckets
+- All file URLs are signed and expire automatically
+- File access requires proper authentication and permissions
+- Only bookmark owners and collection members can access files
+- Share links expire after the specified duration

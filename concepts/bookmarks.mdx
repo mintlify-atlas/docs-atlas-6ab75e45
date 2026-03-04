@@ -1,0 +1,283 @@
+---
+title: Bookmarks
+description: Understanding the bookmark model and its features in Cultus
+---
+
+## Overview
+
+Bookmarks are the core content units in Cultus. They represent saved URLs, uploaded files, or manually created entries that users want to organize and reference later.
+
+## Bookmark Model
+
+The bookmark model contains comprehensive metadata about each saved item:
+
+### Core Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Public identifier for the bookmark |
+| `user_id` | string | Owner of the bookmark |
+| `collection_id` | string | Optional parent collection |
+| `title` | string | Bookmark title (max 2704 characters) |
+| `description` | string | Optional description (max 2704 characters) |
+| `url` | string | Target URL or file URL |
+| `tags` | string | Comma-separated tag list |
+| `type` | string | Content type: `website`, `image`, `video`, `audio`, `music`, `article`, `application` |
+| `status` | enum | `active` or `trashed` |
+| `icon` | string | Favicon or icon URL |
+| `thumbnail` | string | Cover image URL |
+| `size` | float | File size in bytes (for uploaded files) |
+| `views` | integer | View count |
+| `is_broken` | boolean | Whether the URL is broken |
+| `allow_comments` | boolean | Whether comments are enabled |
+| `processing` | boolean | Whether metadata is being parsed |
+| `created_at` | timestamp | Creation timestamp |
+| `updated_at` | timestamp | Last update timestamp |
+| `last_opened_at` | timestamp | Last view timestamp |
+| `updated_by_id` | string | User who last updated the bookmark |
+
+### Archive Fields
+
+Bookmarks can be archived for offline access:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `archive_status` | enum | `pending`, `success`, or `failed` |
+| `archive_size` | float | Size of archived content in bytes |
+
+### File Fields
+
+For uploaded files:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mime_type_id` | integer | MIME type identifier (see below) |
+| `size` | float | File size in bytes |
+
+### Sync Fields
+
+For offline-first synchronization:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `local_id` | string | Unique local identifier for offline-created bookmarks |
+
+### RSS Fields
+
+For bookmarks created from RSS feeds:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `rss_feed_id` | string | Source RSS feed identifier |
+
+## Bookmark Types
+
+Bookmarks are created in three ways:
+
+### 1. URL Bookmarks
+
+Created by providing a URL. The system automatically:
+- Fetches metadata (title, description, favicon, thumbnail)
+- Parses content using readability algorithm
+- Determines content type (article, video, etc.)
+- Archives content for offline access (configurable)
+
+```json
+{
+  "url": "https://example.com/article",
+  "collection": "col_abc123",
+  "tags": "tech,reading",
+  "starred": true
+}
+```
+
+### 2. File Bookmarks
+
+Created by uploading files. Supported file types:
+
+**Documents:**
+- PDF (`application/pdf`)
+- DOCX, PPTX, XLSX (Office formats)
+- Plain text
+- HTML
+- ZIP archives
+
+**Images:**
+- JPG, JPEG, PNG, GIF, WEBP, SVG, BMP
+
+**Audio:**
+- MP3, WAV, OGG, M4A, MP4 audio
+
+**Video:**
+- MP4 video, WEBM
+
+Files are stored in cloud storage and accessible via:
+```
+GET /v1/files/{bookmark_id}
+```
+
+### 3. Manual Bookmarks
+
+Created with custom metadata without automatic parsing:
+
+```json
+{
+  "title": "My Custom Note",
+  "url": "https://example.com",
+  "description": "Custom description",
+  "favicon": "https://example.com/icon.png",
+  "collection": "col_abc123",
+  "tags": "notes",
+  "allow_comments": true
+}
+```
+
+## Metadata Parsing
+
+When a URL is bookmarked, Cultus automatically:
+
+1. **Fetches the page** using a randomized user agent
+2. **Extracts metadata** including:
+   - Open Graph tags (`og:title`, `og:description`, `og:image`)
+   - Twitter Card tags
+   - Standard HTML meta tags
+   - Favicon
+3. **Parses content** using Mozilla's Readability algorithm
+4. **Determines type** based on content analysis
+5. **Updates bookmark** with parsed data
+
+### Custom Covers
+
+Users can override the automatic thumbnail by uploading a custom cover image.
+
+## Archiving
+
+Bookmarks can be archived for offline access:
+
+- **Archive Status:** Tracks archiving progress (`pending`, `success`, `failed`)
+- **Archive Size:** Stores the size of archived content
+- **Archive Process:** Uses Shiori's Obelisk library to create offline-friendly versions
+
+Archived content includes:
+- Full HTML content
+- Embedded images
+- Stylesheets (for formatting)
+
+## Starring
+
+Users can star bookmarks for quick access. Stars are tracked in the `bookmark_stars` table:
+
+- Each user can star/unstar any bookmark they have access to
+- Star status is included in bookmark responses
+- Starred bookmarks can be filtered in queries
+
+## Comments
+
+Bookmarks support threaded comments when `allow_comments` is enabled:
+
+- **Nested comments:** Comments can reply to other comments via `parent_id`
+- **Comment status:** `active` or `hidden`
+- **Comment likes:** Users can like comments
+- **Access control:** Only users with access to the bookmark can comment
+
+See [Comments API](/api-reference/comments) for details.
+
+## Status Management
+
+### Active vs Trashed
+
+Bookmarks have two primary statuses:
+
+- **`active`:** Normal state, visible in collections
+- **`trashed`:** Moved to trash, recoverable
+
+### Soft Deletion
+
+When a bookmark is permanently deleted:
+1. The bookmark record is removed
+2. A tombstone is created in `deleted_bookmarks` table
+3. Associated files are removed from storage
+4. Archive files are removed
+5. Custom covers are removed
+
+### Broken Links
+
+The `is_broken` flag indicates when a URL is no longer accessible. This can be:
+- Set automatically by periodic link checking
+- Set manually by users
+- Used to filter bookmarks in queries
+
+## Storage and Limits
+
+Bookmark storage is tracked per user:
+
+- **File storage:** Sum of all `size` fields for file bookmarks
+- **Archive storage:** Sum of all `archive_size` fields
+- **Quota enforcement:** Based on account type (free, pro, enterprise)
+
+See [Storage Management](/concepts/users#storage-quotas) for details.
+
+## Tags
+
+Tags are stored as comma-separated strings:
+
+```json
+{
+  "tags": "tech,programming,golang"
+}
+```
+
+Tags enable:
+- Filtering bookmarks by topic
+- Organizing content across collections
+- Search refinement
+
+## Visibility and Access
+
+Bookmark visibility is determined by:
+
+1. **Collection privacy:** Bookmarks inherit their collection's privacy settings
+2. **Member roles:** Collection members can access bookmarks based on their role
+3. **Public collections:** Bookmarks in public collections are visible to all users
+
+See [Permissions](/concepts/permissions) for access control details.
+
+## Reader Mode
+
+Bookmarks with article content support reader mode:
+
+```typescript
+interface BookmarkReader {
+  url: string
+  title: string
+  byline: string      // Author information
+  content: string     // Formatted HTML
+  text_content: string // Plain text version
+}
+```
+
+Reader mode provides:
+- Clean, distraction-free reading
+- Consistent formatting
+- Extracted author information
+- Plain text alternative
+
+## Timestamps
+
+Bookmarks track multiple timestamps:
+
+- **`created_at`:** When the bookmark was created
+- **`updated_at`:** Last modification time
+- **`last_opened_at`:** Last time the bookmark was viewed
+
+These enable:
+- Sorting by recency
+- Activity tracking
+- Stale content detection
+
+## Related Resources
+
+- [Collections](/concepts/collections) - Organizing bookmarks
+- [Permissions](/concepts/permissions) - Access control
+- [Users](/concepts/users) - Storage quotas
+- [Bookmark API](/api-reference/bookmarks) - API endpoints

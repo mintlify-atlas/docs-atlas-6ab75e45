@@ -1,0 +1,570 @@
+---
+title: Permissions
+description: Understanding the permission system, scopes, and access control in Cultus
+---
+
+## Overview
+
+Cultus implements a comprehensive permission system that controls access to resources through OAuth scopes, API keys, and collection-based roles.
+
+## Permission Model
+
+Permissions are enforced at multiple levels:
+
+1. **OAuth Scopes** - Fine-grained API access for third-party apps
+2. **API Keys** - Full account access for programmatic use
+3. **Collection Roles** - Member-based access to collections
+4. **Resource Ownership** - Owner-based permissions
+5. **Privacy Settings** - Public vs private access
+
+## OAuth Scopes
+
+Scopes define what actions an OAuth application can perform:
+
+### Scope Format
+
+Scopes follow the format: `resource:action`
+
+```typescript
+type Scope = `${Resource}:${Action}`
+
+type Resource = 
+  | "user" 
+  | "user:trash" 
+  | "user:storage"
+  | "bookmarks" 
+  | "collections" 
+  | "comments"
+  | "files"
+  | "invites"
+  | "invite-links"
+  | "search"
+  | "highlights"
+  | "reminders"
+  | "api-keys"
+  | "apps"
+  | "rss-feeds"
+  | "explore"
+  | "plans"
+
+type Action = "read" | "write" | "edit" | "delete" | "authorize"
+```
+
+### Available Scopes
+
+#### User Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `user:read` | View your account information |
+| `user:edit` | Edit your account information |
+| `user:trash:delete` | Delete your trash |
+| `user:storage:read` | View your storage usage |
+
+#### Bookmark Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `bookmarks:read` | View bookmarks |
+| `bookmarks:write` | Create bookmarks |
+| `bookmarks:edit` | Edit bookmarks |
+| `bookmarks:delete` | Delete bookmarks |
+
+#### Collection Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `collections:read` | View collections |
+| `collections:write` | Create collections |
+| `collections:edit` | Edit collections |
+| `collections:delete` | Delete collections |
+
+#### Comment Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `comments:read` | View comments |
+| `comments:write` | Create comments |
+| `comments:delete` | Delete comments |
+
+#### Invite Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `invites:read` | View invitations |
+| `invites:edit` | Manage invitations |
+
+#### Invite Link Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `invite-links:write` | Create invite links |
+| `invite-links:edit` | Edit invite links |
+| `invite-links:delete` | Delete invite links |
+
+#### Highlight Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `highlights:read` | View highlights |
+| `highlights:write` | Create highlights |
+| `highlights:edit` | Edit highlights |
+| `highlights:delete` | Delete highlights |
+
+#### Reminder Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `reminders:read` | View reminders |
+| `reminders:write` | Create reminders |
+| `reminders:edit` | Edit reminders |
+| `reminders:delete` | Delete reminders |
+
+#### RSS Feed Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `rss-feeds:read` | View RSS feeds |
+| `rss-feeds:write` | Create RSS feeds |
+| `rss-feeds:edit` | Edit RSS feeds |
+| `rss-feeds:delete` | Delete RSS feeds |
+
+#### API Key Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `api-keys:read` | View API keys |
+| `api-keys:write` | Create API keys |
+| `api-keys:edit` | Edit API keys |
+
+#### Read-Only Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `apps:read` | View apps |
+| `plans:read` | View subscription plans |
+| `files:read` | Access file content |
+| `search:read` | Search bookmarks and collections |
+| `explore:read` | Explore public content |
+
+### Requesting Scopes
+
+When creating an OAuth app, specify required scopes:
+
+```json
+{
+  "name": "My Bookmark App",
+  "scopes": "bookmarks:read,bookmarks:write,collections:read"
+}
+```
+
+Scopes are:
+- Comma-separated string
+- Validated against allowed scopes
+- Shown to user during authorization
+- Stored with the app and session
+
+### Scope Descriptions
+
+Scopes are presented to users in human-readable format:
+
+```typescript
+// Input: ["bookmarks:read", "bookmarks:write", "bookmarks:edit"]
+// Output: ["View, Create, and Edit bookmarks"]
+
+function generateScopeDescriptions(scopes: Scope[]): string[] {
+  // Groups actions by resource
+  // Returns formatted descriptions
+}
+```
+
+Example authorization screen:
+```
+My Bookmark App wants to:
+- View, Create, Edit, and Delete bookmarks
+- View and Edit collections
+- Create comments
+```
+
+## OAuth Apps
+
+Users can create custom OAuth applications:
+
+### App Model
+
+```typescript
+interface CustomApp {
+  id: string
+  user_id: string
+  name: string
+  description: string
+  website: string
+  image: string
+  redirect_uri: string
+  secret: string  // Client secret
+  status: "active" | "inactive" | "suspended"
+  scopes: string  // Comma-separated scope list
+  created_at: timestamp
+  updated_at: timestamp
+  last_used_at?: timestamp
+  revoked_at?: timestamp
+}
+```
+
+### OAuth Sessions
+
+When users authorize an app, a session is created:
+
+```typescript
+interface OauthSession {
+  id: number
+  user_id: number
+  app_id: number
+  created_at: timestamp
+  updated_at: timestamp
+  last_used_at?: timestamp
+}
+```
+
+Sessions:
+- Link users to authorized apps
+- Track app usage
+- Can be revoked by user
+- Respect app's granted scopes
+
+### App Status
+
+- **`active`:** App can authorize users
+- **`inactive`:** App cannot authorize new users, existing sessions work
+- **`suspended`:** App is disabled, all sessions are invalid
+
+## API Keys
+
+API keys provide full account access:
+
+### API Key Model
+
+```typescript
+interface APIKey {
+  id: string
+  user_id: string
+  name: string
+  secret: string  // Hashed in database
+  status: "active" | "inactive" | "revoked"
+  usage_count: number
+  created_at: timestamp
+  updated_at: timestamp
+  last_used_at?: timestamp
+  revoked_at?: timestamp
+}
+```
+
+### API Key Permissions
+
+API keys grant:
+- **Full account access** - All endpoints available
+- **No scope restrictions** - Unlike OAuth apps
+- **User-level permissions** - Same access as user login
+
+### API Key Usage
+
+Authenticate requests with:
+
+```http
+Authorization: Bearer {api_key_secret}
+```
+
+API keys:
+- Should be kept secret
+- Should be rotated periodically
+- Can be revoked if compromised
+- Are tracked for usage monitoring
+
+### API Key Security
+
+Best practices:
+- **Name descriptively:** Identify purpose (e.g., "CI/CD Pipeline")
+- **Revoke unused keys:** Remove keys no longer needed
+- **Monitor usage:** Check `usage_count` and `last_used_at`
+- **Use environment variables:** Never commit keys to source control
+
+## Collection Member Permissions
+
+Collection access is role-based:
+
+### Role Levels
+
+```typescript
+type RoleLevel = "admin" | "viewer"
+```
+
+#### Admin Role
+
+Full control over collection:
+
+**Collection Management:**
+- Edit collection name, description
+- Change privacy settings (`is_private`, `allow_public_join`)
+- Upload custom covers
+- Delete collection
+- Move collection to different parent
+
+**Member Management:**
+- Invite new members
+- Change member roles
+- Remove members
+- Create invite links
+- Manage invite link settings
+
+**Bookmark Management:**
+- Create bookmarks
+- Edit any bookmark (including others')
+- Delete any bookmark
+- Move bookmarks to/from collection
+
+**Comment Management:**
+- Create comments
+- Delete any comment
+
+#### Viewer Role
+
+Read and contribute access:
+
+**Viewing:**
+- View all bookmarks
+- View all comments
+- View collection settings
+- View member list
+
+**Creating:**
+- Create new bookmarks
+- Create comments (if enabled)
+- Star bookmarks
+
+**Editing:**
+- Edit own bookmarks only
+- Delete own bookmarks only
+- Edit own comments
+- Delete own comments
+
+**Restricted:**
+- Cannot edit collection settings
+- Cannot invite members
+- Cannot change member roles
+- Cannot delete others' content
+- Cannot delete collection
+
+### Role Assignment
+
+Roles are assigned:
+
+1. **Owner:** Automatically gets admin role
+2. **Invitation:** Specified in invite request
+3. **Invite link:** Specified in link configuration
+4. **Public join:** Always assigned viewer role
+
+### Checking Permissions
+
+Middleware validates:
+
+```typescript
+// Check if user has access to collection
+function hasAccess(
+  collection: Collection,
+  user: User,
+  requiredRole: RoleLevel | "any"
+): boolean {
+  // Owner always has access
+  if (collection.user_id === user.id) return true
+  
+  // Public collections allow "any" role
+  if (requiredRole === "any" && !collection.is_private) return true
+  
+  // Check membership role
+  const userRole = getUserRole(collection, user)
+  
+  switch (requiredRole) {
+    case "admin":
+      return userRole === "admin"
+    case "viewer":
+      return userRole === "viewer" || userRole === "admin"
+    default:
+      return false
+  }
+}
+```
+
+## Middleware Checks
+
+Permissions are enforced by middleware:
+
+### Authentication Middleware
+
+Validates user identity:
+
+```typescript
+function requireAuth(request: Request) {
+  const token = request.headers.authorization
+  const user = validateToken(token)
+  
+  if (!user) {
+    throw new UnauthorizedError()
+  }
+  
+  if (user.status !== "active") {
+    throw new ForbiddenError("Account is not active")
+  }
+  
+  request.user = user
+}
+```
+
+### Scope Middleware
+
+Validates OAuth scopes:
+
+```typescript
+function requireScope(
+  requiredScopes: Scope[]
+) {
+  return (request: Request) => {
+    const session = request.oauthSession
+    const app = session.app
+    
+    for (const scope of requiredScopes) {
+      if (!app.scopes.includes(scope)) {
+        throw new ForbiddenError(`Missing scope: ${scope}`)
+      }
+    }
+  }
+}
+```
+
+### Ownership Middleware
+
+Validates resource ownership:
+
+```typescript
+function requireOwnership(
+  resource: "bookmark" | "collection" | "comment"
+) {
+  return (request: Request) => {
+    const resourceId = request.params.id
+    const resource = getResource(resource, resourceId)
+    
+    if (resource.user_id !== request.user.id) {
+      throw new ForbiddenError("Not the resource owner")
+    }
+  }
+}
+```
+
+### Role Middleware
+
+Validates collection roles:
+
+```typescript
+function requireCollectionRole(
+  role: RoleLevel | "any"
+) {
+  return (request: Request) => {
+    const collectionId = request.params.id
+    const collection = getCollection(collectionId)
+    
+    if (!hasAccess(collection, request.user, role)) {
+      throw new ForbiddenError("Insufficient permissions")
+    }
+  }
+}
+```
+
+## Privacy-Based Access
+
+Resource visibility depends on privacy settings:
+
+### Private Collections
+
+- Only owner and members can access
+- Bookmarks are not visible to non-members
+- Not shown in explore/discovery
+
+### Public Collections
+
+- Anyone can view (read-only)
+- Bookmarks are publicly accessible
+- Can be discovered in explore
+- Members still have role-based write access
+
+### Private User Accounts
+
+When `user.private_account = true`:
+
+- Profile not shown in public directories
+- Collections not discoverable
+- Can still be invited to collections
+- Public profile visible in collection contexts
+
+## Error Responses
+
+Permission errors return appropriate HTTP status codes:
+
+### 401 Unauthorized
+
+Authentication required but not provided:
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Authentication required"
+}
+```
+
+### 403 Forbidden
+
+Authenticated but insufficient permissions:
+
+```json
+{
+  "error": "Forbidden",
+  "message": "Insufficient permissions",
+  "required_scope": "bookmarks:write"
+}
+```
+
+### 404 Not Found
+
+Resource doesn't exist or user has no access:
+
+```json
+{
+  "error": "Not Found",
+  "message": "Collection not found"
+}
+```
+
+**Note:** 404 is returned for private resources to prevent information disclosure.
+
+## Best Practices
+
+### For Users
+
+- Review OAuth app permissions carefully
+- Revoke unused OAuth sessions
+- Rotate API keys periodically
+- Use viewer role by default for collection members
+- Set appropriate privacy levels
+
+### For Developers
+
+- Request minimum necessary scopes
+- Handle permission errors gracefully
+- Store API keys securely
+- Validate permissions server-side
+- Use middleware for consistent enforcement
+
+## Related Resources
+
+- [Collections](/concepts/collections) - Collection roles
+- [Users](/concepts/users) - User accounts
+- [Bookmarks](/concepts/bookmarks) - Content access
+- [Authentication](/api-reference/authentication) - OAuth flow

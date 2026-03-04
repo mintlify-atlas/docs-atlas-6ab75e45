@@ -1,0 +1,669 @@
+---
+title: Architecture
+description: System architecture and design of the Cultus API
+---
+
+Cultus is a high-performance REST API built with Go, designed to power the Linkvite bookmark management platform. This guide explains the system architecture, components, and request flow.
+
+## System overview
+
+Cultus follows a clean, layered architecture with clear separation of concerns:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Client Apps                           │
+│           (Web, Mobile, Browser Extensions)                  │
+└────────────────────────┬────────────────────────────────────┘
+                         │ HTTPS/WSS
+┌────────────────────────▼────────────────────────────────────┐
+│                     Cultus API (Go)                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐   │
+│  │   Handlers   │──│ Middlewares  │──│   Services      │   │
+│  │  (Routes)    │  │  (Auth, etc) │  │  (Business)     │   │
+│  └──────────────┘  └──────────────┘  └─────────────────┘   │
+└─────────┬──────────────────┬───────────────┬───────────────┘
+          │                  │               │
+    ┌─────▼─────┐    ┌──────▼──────┐   ┌───▼────┐
+    │PostgreSQL │    │    Redis    │   │  NATS  │
+    │(Database) │    │   (Cache)   │   │(Queue) │
+    └───────────┘    └─────────────┘   └────┬───┘
+                                             │
+    ┌─────────────────────────────────┬─────▼───────┐
+    │      Centrifugo                 │   Workers   │
+    │   (WebSocket/SSE)               │(Background) │
+    └─────────────────────────────────┴─────────────┘
+                     │
+            ┌────────▼────────┐
+            │   S3 Storage    │
+            │  (Wasabi/AWS)   │
+            └─────────────────┘
+```
+
+## Core components
+
+### HTTP server (Fiber)
+
+Cultus uses [Fiber v2](https://gofiber.io/), a fast Express-inspired web framework built on top of Fasthttp.
+
+**Location:** `internal/server/server.go:24`
+
+```go internal/server/server.go
+type Server struct {
+	*fiber.App
+}
+
+func New() *Server {
+	engine := html.New("./views", ".html")
+	app := fiber.New(fiber.Config{
+		AppName:      "Cultus",
+		BodyLimit:    200 * 1024 * 1024, // 200MB
+		ProxyHeader:  fiber.HeaderXForwardedFor,
+		ErrorHandler: response.DefaultErrorHandler,
+	})
+	return &Server{app}
+}
+```
+
+**Key middleware:**
+- **CORS** - Cross-origin requests with credentials
+- **Compression** - Response compression (gzip)
+- **Helmet** - Security headers
+- **Rate limiting** - Per-route request throttling
+- **Sentry** - Error tracking and monitoring
+- **Idempotency** - Prevent duplicate requests
+- **HTTPS enforcement** - Production-only
+
+### Handlers (HTTP layer)
+
+**Location:** `handlers/` directory
+
+Handlers process HTTP requests and responses. Each handler corresponds to a resource:
+
+- `auth.go` - Authentication (signup, login, OAuth)
+- `bookmarks.go` - Bookmark CRUD operations
+- `collections.go` - Collection management
+- `users.go` - User profile operations
+- `comments.go` - Comment threads
+- `search.go` - Search functionality
+- `files.go` - File uploads/downloads
+- `reminders.go` - Reminder notifications
+
+**Example handler structure:**
+
+```go handlers/auth.go
+func (h *handler) signup(c *fiber.Ctx) error {
+	res := response.New(c)
+	input := new(schema.SignUpRequest)
+	
+	// Parse and validate input
+	if err := c.BodyParser(input); err != nil {
+		return res.Error(response.Data{
+			Stack:  err,
+			Status: fiber.StatusUnprocessableEntity,
+		})
+	}
+	
+	// Check if user exists
+	exists, err := h.services.Users.Exists("email", input.Email)
+	if exists {
+		return res.Error(response.Data{
+			Message: "Email already in use",
+			Status:  fiber.StatusBadRequest,
+		})
+	}
+	
+	// Create user
+	user := user.New(input.Email, input.Username)
+	h.services.Users.SetPassword(user, input.Password)
+	h.services.Users.Create(user)
+	
+	// Generate JWT tokens
+	tokens, _ := jwt.NewTokens(jwt.GenericPayload{
+		UserID:   user.PublicID,
+		AuthType: jwt.AuthTypePassword,
+	})
+	
+	return res.Success(response.Data{
+		Message: "Welcome to Linkvite!",
+		Data:    tokens,
+	})
+}
+```
+
+### Services (Business logic)
+
+**Location:** `internal/services/` directory
+
+Services contain business logic and database operations. They are injected into handlers:
+
+```go internal/services/services.go
+type Services struct {
+	APIKeys          *apiKeysService
+	Bookmarks        *bookmarksService
+	Collections      *collectionsService
+	Comments         *commentsService
+	Highlights       *highlightsService
+	Invites          *invitesService
+	Members          *membersService
+	Reminders        *remindersService
+	Search           *searchService
+	Users            *usersService
+	Notification     *notificationsService
+	RSSFeeds         *rssFeedsService
+	Apps             *customAppsService
+	Oauth            *oauthService
+	// ... more services
+}
+```
+
+Services interact with the database using [dbx](https://github.com/pocketbase/dbx), a PostgreSQL query builder.
+
+### Middlewares
+
+**Location:** `internal/middlewares/` directory
+
+Middlewares handle cross-cutting concerns:
+
+- **Authentication** - JWT token validation (`RequireAuth`)
+- **Authorization** - Scope-based permissions (read, write, delete)
+- **Rate limiting** - Per-route and per-user limits
+- **OAuth validation** - Prevent OAuth tokens from sensitive operations
+
+Example route with middleware:
+
+```go handlers/routes.go
+bookmarks.Get(
+	"/",
+	middlewares.UseDefaultLimiter(),
+	middlewares.RequireAuth,
+	middlewares.BookmarkReadScope,
+	h.getBookmarksByUser,
+)
+```
+
+## Data layer
+
+### PostgreSQL (Primary database)
+
+**Location:** `internal/db/db.go:16`
+
+PostgreSQL stores all persistent data using the [dbx](https://github.com/pocketbase/dbx) query builder:
+
+```go internal/db/db.go
+var Conn *dbx.DB
+
+func init() {
+	db, err := dbx.MustOpen("postgres", config.Vars.PostgresDSN)
+	if err != nil {
+		log.Fatalf("failed to connect to Postgres: %v", err)
+	}
+	
+	sqlDB := db.DB()
+	sqlDB.SetMaxOpenConns(500)
+	sqlDB.SetMaxIdleConns(200)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	
+	Conn = db
+}
+```
+
+**Database schema:**
+
+All migrations are in `sql/` directory:
+
+- `0001_users.sql` - User accounts and profiles
+- `0002_api_keys.sql` - API key authentication
+- `0003_collections.sql` - Bookmark collections (folders)
+- `0004_bookmarks.sql` - Bookmarks with metadata
+- `0005_comments.sql` - Comment threads on bookmarks
+- `0006_highlights.sql` - Text highlights within pages
+- `0007_invite_links.sql` - Shareable invite links
+- `0008_invites.sql` - User invitations
+- `0009_bookmark_stars.sql` - Starred/favorited bookmarks
+- `0010_members.sql` - Collection membership
+- `0011_notifications.sql` - In-app notifications
+- `0012_reminders.sql` - Scheduled reminders
+- `0013_wait_lists.sql` - Beta waitlist management
+- `0014_external_accounts.sql` - OAuth provider links
+- `0015_comment_likes.sql` - Comment reactions
+- `0016_custom_apps.sql` - OAuth client apps
+- `0017_oauth_session.sql` - OAuth authorization codes
+- `0018_rss_feeds.sql` - RSS feed subscriptions
+
+### Redis (Cache)
+
+**Location:** `internal/cache/cache.go:58`
+
+Redis caches frequently accessed data to reduce database load:
+
+```go internal/cache/cache.go
+var Conn *redis.Storage
+
+// Cache keys
+KEY_USER                      = "user:%d"
+KEY_BOOKMARK                  = "bookmark:%d"
+KEY_COLLECTION                = "collection:%s"
+KEY_VALID_API_KEY             = "valid_api_key:%s"
+KEY_PASSWORD_RESET_OTP        = "pr_otp:%s"
+KEY_EMAIL_VERIFICATION        = "email_verification:%s"
+
+// Cache durations
+DURATION_USER               = 30 * time.Second
+DURATION_BOOKMARK           = 30 * time.Second
+DURATION_VALID_API_KEY      = 60 * time.Second
+DURATION_EMAIL_VERIFICATION = 24 * time.Hour
+```
+
+**Common cache patterns:**
+
+1. **Read-through cache** - Check cache first, then database
+2. **Write-through cache** - Update database and cache simultaneously
+3. **Cache invalidation** - Delete cache on updates/deletes
+
+### NATS (Message queue)
+
+**Location:** `internal/queue/queue.go:26`
+
+NATS JetStream handles asynchronous background jobs:
+
+```go internal/queue/queue.go
+type Queue struct {
+	Conn     nats.JetStreamContext
+	notify   *notifier.Notify
+	storage  *storage.Storage
+	services services.Services
+}
+
+func New() (*Queue, error) {
+	nc, err := nats.Connect(config.Vars.NatsURL)
+	if err != nil {
+		return nil, err
+	}
+	
+	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
+	if err != nil {
+		return nil, err
+	}
+	
+	_, err = js.AddStream(&nats.StreamConfig{
+		Name:     "EVENTS",
+		Subjects: []string{"events.>"},
+	})
+	
+	return &Queue{Conn: js}, nil
+}
+```
+
+**Event-driven operations:**
+- Email notifications (welcome, invites, reminders)
+- Push notifications (mobile apps)
+- WebSocket broadcasts (real-time updates)
+- File processing (uploads, thumbnails)
+- Search indexing
+
+## Background workers
+
+**Location:** `worker/` directory
+
+Workers run scheduled tasks and consume queue messages:
+
+```go worker/workers.go
+func (w *worker) startWorkers() {
+	s := gocron.NewScheduler(time.UTC)
+	
+	// Process due reminders every minute
+	s.Every(1).Minute().Do(w.findAndProcessDueReminders)
+	
+	// Cleanup deleted resources weekly
+	s.Every(1).Week().Do(w.findAndDeleteCollections)
+	s.Every(1).Week().Do(w.findAndDeleteUsers)
+	
+	// Send waitlist invites every Wednesday
+	s.Every(1).Wednesday().Do(w.sendWaitListInvites)
+	
+	// Process bookmark metadata every minute
+	s.Every(1).Minute().Do(w.findAndProcessBookmarks)
+	
+	// Update RSS feeds every 6 hours
+	s.Every(6).Hours().Do(w.findAndAutoUpdateRSSFeeds)
+	
+	s.StartAsync()
+}
+```
+
+**Worker responsibilities:**
+- Send reminder notifications at scheduled times
+- Fetch bookmark metadata (title, description, images)
+- Update RSS feed items
+- Delete soft-deleted users and collections
+- Send waitlist invitations
+
+## Real-time communication
+
+### Centrifugo (WebSocket/SSE)
+
+**Location:** `internal/socket/socket.go:16`
+
+Centrifugo provides real-time updates via WebSocket or Server-Sent Events:
+
+```go internal/socket/socket.go
+type Socket struct {
+	*centrifuge.Client
+}
+
+func New() *Socket {
+	client := centrifuge.NewJsonClient(
+		config.Vars.CentrifugoURL,
+		centrifuge.Config{},
+	)
+	
+	if err := client.Connect(); err != nil {
+		log.Fatalf("failed to connect to Centrifugo: %v", err)
+	}
+	
+	return &Socket{Client: client}
+}
+
+func (s *Socket) Publish(msg types.Payload) error {
+	for _, channel := range msg.Channels {
+		s.Client.Publish(ctx, channel, data)
+	}
+	return nil
+}
+```
+
+**Real-time events:**
+- New bookmark added to shared collection
+- Comment posted on bookmark
+- Collection invite received
+- Reminder notification
+- Collection member presence (who's viewing)
+
+**Channel naming:**
+- `user:{user_id}` - User-specific events
+- `collection:{collection_id}` - Collection updates
+- `bookmark:{bookmark_id}` - Bookmark comments/changes
+
+## Storage layer
+
+### S3-compatible storage
+
+**Location:** `internal/storage/storage.go:15`
+
+File uploads (images, documents, archives) are stored in S3-compatible object storage:
+
+```go internal/storage/storage.go
+type Storage struct {
+	name     string
+	client   *s3.S3
+	uploader *s3manager.Uploader
+}
+
+func New() (*Storage, error) {
+	config := aws.Config{
+		S3ForcePathStyle: aws.Bool(true),
+		Region:           aws.String(config.Vars.AWSRegion),
+		Endpoint:         aws.String(config.Vars.AWSEndpoint),
+		Credentials:      credentials.NewStaticCredentials(
+			config.Vars.AWSAccessKey,
+			config.Vars.AWSSecretKey,
+			"",
+		),
+	}
+	
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config:  config,
+		Profile: "wasabi",
+	})
+	
+	return &Storage{
+		name:     config.Vars.AWSBucketName,
+		client:   s3.New(sess),
+		uploader: s3manager.NewUploader(sess),
+	}, nil
+}
+```
+
+**Supported storage providers:**
+- AWS S3
+- Wasabi (default)
+- DigitalOcean Spaces
+- MinIO
+- Any S3-compatible service
+
+**Stored file types:**
+- User avatars
+- Bookmark screenshots
+- File bookmarks (PDFs, documents)
+- Bookmark archives (HTML snapshots)
+- Exported user data
+
+## Request flow
+
+Here's how a typical authenticated request flows through the system:
+
+<Steps>
+  <Step title="Client sends request">
+    Client makes an HTTPS request with JWT token:
+    
+    ```bash
+    POST /v1/bookmarks
+    Authorization: Bearer eyJhbGc...
+    Content-Type: application/json
+    
+    {"url": "https://example.com", "title": "Example"}
+    ```
+  </Step>
+
+  <Step title="Middleware chain">
+    Request passes through middleware layers:
+    
+    1. **Rate limiter** - Check request quota
+    2. **JWT validation** - Verify and decode token (handlers/handler.go:35)
+    3. **Scope check** - Ensure user has `bookmark:write` permission
+    4. **Context enrichment** - Attach user object to request context
+  </Step>
+
+  <Step title="Handler processes request">
+    Handler validates input and calls service:
+    
+    ```go
+    func (h *handler) createBookmark(c *fiber.Ctx) error {
+        input := new(schema.CreateBookmarkRequest)
+        c.BodyParser(input)
+        
+        user := getLoggedInUser(c)
+        bookmark := h.services.Bookmarks.Create(user, input)
+        
+        return res.Success(response.Data{Data: bookmark})
+    }
+    ```
+  </Step>
+
+  <Step title="Service executes business logic">
+    Service validates, transforms data, and updates database:
+    
+    1. Validate URL format
+    2. Check user storage quota
+    3. Insert bookmark into PostgreSQL
+    4. Cache bookmark in Redis
+    5. Publish event to NATS queue
+  </Step>
+
+  <Step title="Background processing">
+    Worker consumes queue message:
+    
+    1. Fetch page metadata (title, description, image)
+    2. Generate screenshot if enabled
+    3. Upload assets to S3
+    4. Update bookmark record
+    5. Broadcast update via Centrifugo
+  </Step>
+
+  <Step title="Real-time notification">
+    Connected clients receive WebSocket event:
+    
+    ```json
+    {
+      "event": "bookmark.created",
+      "data": {
+        "bookmark_id": "bmk_...",
+        "collection_id": "col_..."
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Authentication & authorization
+
+### JWT-based authentication
+
+**Location:** `pkg/jwt/`
+
+Cultus uses JWT tokens for stateless authentication:
+
+```go
+type Token struct {
+	Subject  string    // User public ID
+	AuthType string    // "password" or "oauth"
+	IssuedAt time.Time
+	Expiry   time.Time
+}
+
+// Access token: 15 minutes
+// Refresh token: 7 days
+```
+
+**Authentication methods:**
+- Email/password (handlers/auth.go:73)
+- Google OAuth (handlers/auth.go:656)
+- Apple OAuth (handlers/auth.go:627)
+- API keys (for integrations)
+
+### Scope-based authorization
+
+**Location:** `internal/scopes/` and `internal/middlewares/`
+
+Permissions are enforced via OAuth-style scopes:
+
+- `user:read` - View user profile
+- `user:edit` - Update user settings
+- `bookmark:read` - View bookmarks
+- `bookmark:write` - Create bookmarks
+- `bookmark:edit` - Update bookmarks
+- `bookmark:delete` - Delete bookmarks
+- `collection:admin` - Manage collection settings
+
+API keys can have restricted scopes to limit access.
+
+## Configuration
+
+**Location:** `pkg/config/`
+
+All configuration is managed via environment variables (see `.env.example:1`):
+
+```go pkg/config/
+type Config struct {
+	AppName        string
+	AppEnv         string
+	Port           string
+	PostgresDSN    string
+	RedisDSN       string
+	NatsURL        string
+	CentrifugoURL  string
+	JWTSecret      string
+	AWSAccessKey   string
+	AWSSecretKey   string
+	AWSBucketName  string
+	// ... more config
+}
+```
+
+Configuration is loaded once at startup and accessed globally.
+
+## Error handling & monitoring
+
+### Sentry integration
+
+All errors are automatically reported to Sentry (main.go:36):
+
+```go main.go
+err := sentry.Init(sentry.ClientOptions{
+	Dsn:              config.Vars.SentryDSN,
+	AttachStacktrace: true,
+})
+```
+
+### Structured logging
+
+**Location:** `internal/logger/`
+
+All logs use structured logging with [Zap](https://github.com/uber-go/zap):
+
+```go
+logger.Logger.Info("user signed up", 
+	zap.String("user_id", user.PublicID),
+	zap.String("email", user.Email),
+)
+```
+
+## Performance optimizations
+
+<CardGroup cols={2}>
+  <Card title="Connection pooling" icon="database">
+    PostgreSQL: 500 max connections, 200 idle (internal/db/db.go:33)
+  </Card>
+  <Card title="Redis caching" icon="bolt">
+    30-second cache for frequently accessed entities
+  </Card>
+  <Card title="Response compression" icon="compress">
+    Gzip compression for all API responses
+  </Card>
+  <Card title="Async processing" icon="clock">
+    Heavy operations (metadata fetching) run in background
+  </Card>
+</CardGroup>
+
+## Security features
+
+- **HTTPS enforcement** - Production mode only (internal/server/server.go:82)
+- **Rate limiting** - Per-route and per-user quotas
+- **Password hashing** - bcrypt with configurable cost
+- **JWT expiry** - Short-lived access tokens (15min)
+- **Scope validation** - Fine-grained permission checks
+- **CORS restrictions** - Configurable allowed origins
+- **Input validation** - Schema validation for all requests
+- **SQL injection prevention** - Parameterized queries via dbx
+
+## Deployment
+
+Cultus supports multiple deployment environments:
+
+- **Development** - `docker-compose.dev.yml` with hot reload
+- **Staging** - `docker-compose.stg.yml` with production settings
+- **Production** - `docker-compose.prod.yml` with optimizations
+
+Build production binary:
+
+```bash
+make build
+# Output: build/app
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get Cultus running locally
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Explore all endpoints
+  </Card>
+  <Card title="Authentication" icon="key" href="/api-reference/auth/login">
+    Implement authentication
+  </Card>
+  <Card title="WebSocket Events" icon="signal" href="/websockets">
+    Real-time updates guide
+  </Card>
+</CardGroup>

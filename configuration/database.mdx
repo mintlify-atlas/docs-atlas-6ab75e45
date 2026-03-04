@@ -1,0 +1,368 @@
+---
+title: Database Configuration
+description: PostgreSQL setup, migrations, and schema documentation for Cultus API
+---
+
+Cultus uses PostgreSQL as its primary database with connection pooling and Redis for caching.
+
+## PostgreSQL Connection
+
+### DSN Format
+
+The `POSTGRES_DSN` environment variable uses the standard PostgreSQL connection string format:
+
+```bash
+postgres://username:password@host:port/database?options
+```
+
+### Examples
+
+```bash
+# Local development
+POSTGRES_DSN=postgres://cultus:password@localhost:5432/cultus?sslmode=disable
+
+# Production with SSL
+POSTGRES_DSN=postgres://user:pass@db.example.com:5432/cultus?sslmode=require
+
+# With connection pool parameters
+POSTGRES_DSN=postgres://user:pass@localhost:5432/cultus?pool_max_conns=50&pool_min_conns=10
+```
+
+### Connection Configuration
+
+The database connection is initialized in `internal/db/db.go:22-47` with the following pool settings:
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `MaxOpenConns` | 500 | Maximum number of open connections to the database |
+| `MaxIdleConns` | 200 | Maximum number of idle connections in the pool |
+| `ConnMaxLifetime` | 30 minutes | Maximum lifetime of a connection before it's closed |
+
+```go
+sqlDB.SetMaxOpenConns(500)
+sqlDB.SetMaxIdleConns(200)
+sqlDB.SetConnMaxLifetime(30 * time.Minute)
+```
+
+## Database Migrations
+
+### Migration Files
+
+Migration files are located in the `sql/` directory at the project root. They use sequential numbering:
+
+```
+sql/
+├── 0001_users.sql
+├── 0002_api_keys.sql
+├── 0003_collections.sql
+├── 0004_bookmarks.sql
+├── 0005_comments.sql
+├── 0006_highlights.sql
+├── 0007_invite_links copy.sql
+├── 0008_invites.sql
+├── 0009_bookmark_stars.sql
+├── 0010_members.sql
+├── 0011_notifications.sql
+├── 0012_reminders.sql
+├── 0013_wait_lists.sql
+├── 0014_external_accounts.sql
+├── 0015_comment_likes.sql
+├── 0016_custom_apps.sql
+├── 0017_oauth_session.sql
+└── 0018_rss_feeds.sql
+```
+
+### Running Migrations
+
+Migrations must be run manually using a PostgreSQL client or migration tool. The application does not auto-migrate.
+
+<Steps>
+  <Step title="Connect to Database">
+    ```bash
+    psql $POSTGRES_DSN
+    ```
+  </Step>
+  
+  <Step title="Run Migration Files in Order">
+    ```bash
+    # Run each migration file sequentially
+    psql $POSTGRES_DSN -f sql/0001_users.sql
+    psql $POSTGRES_DSN -f sql/0002_api_keys.sql
+    # ... continue for all files
+    ```
+  </Step>
+  
+  <Step title="Verify Tables Created">
+    ```sql
+    \dt  -- List all tables
+    \d users  -- Describe users table
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Always backup your database before running migrations in production.
+</Warning>
+
+## Database Schema
+
+### Core Tables
+
+The database schema includes the following main tables:
+
+#### Users Table
+
+Defined in `sql/0001_users.sql:7-30`
+
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    public_id VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    username VARCHAR(30) UNIQUE NOT NULL,
+    password TEXT,  -- nullable for OAuth users
+    avatar TEXT NOT NULL,
+    email_verified BOOLEAN DEFAULT FALSE,
+    account_type account_type DEFAULT 'free',
+    status user_status DEFAULT 'active',
+    verified BOOLEAN DEFAULT FALSE,
+    folder_name TEXT DEFAULT 'Folder',
+    private_account BOOLEAN DEFAULT FALSE,
+    last_login_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    push_notification_enabled BOOLEAN DEFAULT FALSE,
+    email_notification_enabled BOOLEAN DEFAULT FALSE,
+    in_app_notification_enabled BOOLEAN DEFAULT FALSE,
+    push_token VARCHAR(255)
+);
+```
+
+**Enums:**
+- `account_type`: `free`, `pro`, `enterprise`
+- `user_status`: `active`, `suspended`, `deleted`
+
+#### Collections Table
+
+Defined in `sql/0003_collections.sql:6-30`
+
+```sql
+CREATE TABLE collections (
+    id SERIAL PRIMARY KEY,
+    public_id VARCHAR(255) UNIQUE NOT NULL,
+    user_id INT NOT NULL,
+    user_public_id VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    status collection_status DEFAULT 'active',
+    is_private BOOLEAN DEFAULT FALSE,
+    allow_public_join BOOLEAN DEFAULT FALSE,
+    thumbnail TEXT,
+    icon TEXT,
+    views INT DEFAULT 0,
+    parent_id INT,
+    parent_public_id VARCHAR(255),
+    updated_by_id VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_opened_at TIMESTAMP WITH TIME ZONE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+```
+
+**Enum:**
+- `collection_status`: `active`, `inactive`
+
+#### Bookmarks Table
+
+Defined in `sql/0004_bookmarks.sql:32-64`
+
+```sql
+CREATE TABLE bookmarks (
+    id SERIAL PRIMARY KEY,
+    public_id VARCHAR(255) UNIQUE NOT NULL,
+    user_id INT NOT NULL,
+    user_public_id VARCHAR(255) NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    collection_id INT,
+    collection_public_id VARCHAR(255),
+    status bookmark_status DEFAULT 'active',
+    is_broken BOOLEAN DEFAULT FALSE,
+    allow_comments BOOLEAN DEFAULT FALSE,
+    tags TEXT DEFAULT '',  -- comma-separated
+    icon TEXT DEFAULT '',
+    thumbnail TEXT DEFAULT '',
+    processing BOOLEAN DEFAULT FALSE,
+    type bookmark_type NOT NULL,  -- no default
+    mime_type_id INT NOT NULL,
+    url TEXT NOT NULL,
+    size DOUBLE PRECISION,
+    archive_status archive_status DEFAULT 'pending',
+    archive_size DOUBLE PRECISION DEFAULT 0,
+    views INT DEFAULT 0,
+    rss_feed_id INT,
+    rss_feed_public_id VARCHAR(255),
+    local_id VARCHAR(255) UNIQUE,  -- for offline sync
+    updated_by_id VARCHAR(255),
+    updated_at TIMESTAMP WITH TIME ZONE,  -- no default
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_opened_at TIMESTAMP WITH TIME ZONE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (mime_type_id) REFERENCES mime_types (id) ON DELETE CASCADE
+);
+```
+
+**Enums:**
+- `bookmark_status`: `active`, `trashed` (deleted bookmarks are removed from table)
+- `bookmark_type`: `image`, `video`, `audio`, `music`, `article`, `application`, `website`
+- `archive_status`: `pending`, `success`, `failed`
+
+#### MIME Types Table
+
+Defined in `sql/0004_bookmarks.sql:23-30`
+
+Pre-populated with supported content types:
+
+```sql
+CREATE TABLE mime_types (
+    id INT PRIMARY KEY NOT NULL,
+    code VARCHAR(63) UNIQUE NOT NULL,
+    description TEXT NOT NULL
+);
+```
+
+Supported types: HTML, Plain text, PDF, ZIP, Office documents (DOCX, PPTX, XLSX), Images (JPG, PNG, GIF, WebP, SVG, BMP), Audio (MP3, WAV, OGG, M4A), Video (MP4, WebM)
+
+#### Deleted Bookmarks (Tombstones)
+
+Defined in `sql/0004_bookmarks.sql:121-128`
+
+```sql
+CREATE TABLE deleted_bookmarks (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    bookmark_public_id VARCHAR(255) NOT NULL,
+    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+```
+
+A trigger automatically creates tombstone records when bookmarks are deleted (for sync purposes).
+
+### Supporting Tables
+
+- **api_keys** - API key management (`sql/0002_api_keys.sql`)
+- **comments** - Bookmark comments (`sql/0005_comments.sql`)
+- **highlights** - Text highlights (`sql/0006_highlights.sql`)
+- **invite_links** - Collection invite links (`sql/0007_invite_links copy.sql`)
+- **invites** - User invitations (`sql/0008_invites.sql`)
+- **bookmark_stars** - Starred bookmarks (`sql/0009_bookmark_stars.sql`)
+- **members** - Collection members (`sql/0010_members.sql`)
+- **notifications** - In-app notifications (`sql/0011_notifications.sql`)
+- **reminders** - Bookmark reminders (`sql/0012_reminders.sql`)
+- **wait_lists** - Beta waitlist (`sql/0013_wait_lists.sql`)
+- **external_accounts** - OAuth account linking (`sql/0014_external_accounts.sql`)
+- **comment_likes** - Comment reactions (`sql/0015_comment_likes.sql`)
+- **custom_apps** - Custom application integrations (`sql/0016_custom_apps.sql`)
+- **oauth_session** - OAuth state management (`sql/0017_oauth_session.sql`)
+- **rss_feeds** - RSS feed subscriptions (`sql/0018_rss_feeds.sql`)
+
+### Indexes
+
+All tables include strategic indexes for performance:
+
+```sql
+-- Users
+CREATE INDEX idx_users_name ON users(name);
+CREATE INDEX idx_users_status ON users(status);
+CREATE INDEX idx_users_account_type ON users(account_type);
+
+-- Bookmarks
+CREATE INDEX idx_bookmarks_user_id ON bookmarks(user_id);
+CREATE INDEX idx_bookmarks_collection_id ON bookmarks(collection_id);
+CREATE INDEX idx_bookmarks_url ON bookmarks(url);
+CREATE INDEX idx_bookmarks_status ON bookmarks(status);
+CREATE INDEX idx_bookmarks_processing ON bookmarks(processing);
+CREATE INDEX idx_bookmarks_type ON bookmarks(type);
+
+-- Collections
+CREATE INDEX idx_collections_user_id ON collections(user_id);
+CREATE INDEX idx_collections_status ON collections(status);
+CREATE INDEX idx_collections_is_private ON collections(is_private);
+```
+
+## Redis Cache
+
+Redis is used for caching and session management. Configuration is handled via `REDIS_DSN` environment variable.
+
+### Cache Keys
+
+Defined in `internal/cache/cache.go:16-39`:
+
+```go
+KEY_USER                      = "user:%d"
+KEY_USER_PUBLIC_ID            = "user:public_id:%s"
+KEY_PROFILE                   = "profile:%s"
+KEY_BOOKMARK                  = "bookmark:%d"
+KEY_BOOKMARK_PUBLIC_ID        = "bookmark:public_id:%s"
+KEY_COLLECTION                = "collection:%s"
+KEY_VALID_API_KEY             = "valid_api_key:%s"
+KEY_INVALID_API_KEY           = "invalid_api_key:%s"
+KEY_BLACKLISTED_ACCESS_TOKEN  = "blacklisted_access_token:%s"
+KEY_USER_STORAGE_USAGE        = "storage_usage:%s"
+KEY_PASSWORD_RESET_OTP        = "pr_otp:%s"
+KEY_EMAIL_VERIFICATION        = "email_verification:%s"
+KEY_PARSED_LINK               = "parsed_link:%s"
+KEY_OAUTH_STATE               = "oauth_state:%s"
+KEY_RSS_FEED                  = "rss_feed:%s"
+```
+
+### Cache TTLs
+
+```go
+DURATION_USER               = 30 seconds
+DURATION_BOOKMARK           = 30 seconds
+DURATION_COLLECTION         = 30 seconds
+DURATION_VALID_API_KEY      = 60 seconds
+DURATION_INVALID_API_KEY    = 24 hours
+DURATION_EMAIL_VERIFICATION = 24 hours
+DURATION_PASSWORD_RESET_OTP = 5 minutes
+DURATION_USER_STORAGE_USAGE = 45 seconds
+DURATION_PARSED_LINK        = 30 seconds
+DURATION_OAUTH_STATE        = 5 minutes
+```
+
+## Database Utilities
+
+The `internal/db` package provides helper functions:
+
+```go
+// Check if error is "not found"
+if db.IsNotFound(err) {
+    // handle not found
+}
+
+// Check if error is duplicate key violation
+if db.IsDuplicate(err) {
+    // handle duplicate
+}
+```
+
+## Development Query Logging
+
+In development mode (`APP_ENV=development`), all SQL queries are logged to stdout:
+
+```go
+if config.Vars.IsDev {
+    db.LogFunc = log.Printf
+}
+```
+
+## Related Documentation
+
+- [Environment Variables](/configuration/environment) - Database connection settings
+- [Storage Configuration](/configuration/storage) - File storage for bookmarks
+- [Queue Configuration](/configuration/queue) - Async job processing

@@ -1,0 +1,108 @@
+---
+title: "Parse Link"
+description: "Extract metadata from URLs"
+---
+
+## POST /parser
+
+Extract metadata (title, description, images, etc.) from a URL without saving it as a bookmark.
+
+### Authentication
+
+Public endpoint when using GET method (rate limited to 10 requests per minute).
+Requires authentication for POST method (default rate limits).
+
+### Query Parameters (GET method)
+
+<ParamField query="link" type="string" required>
+  URL-encoded link to parse
+</ParamField>
+
+### Request Body (POST method)
+
+<ParamField body="link" type="string" required>
+  Link to parse (can be URL-encoded or plain)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Parsed metadata
+  <Expandable title="Parsed Data">
+    <ResponseField name="url" type="string">
+      Canonical URL
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      Page title
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      Page description
+    </ResponseField>
+    <ResponseField name="image" type="string">
+      Preview image URL
+    </ResponseField>
+    <ResponseField name="icon" type="string">
+      Site favicon URL
+    </ResponseField>
+    <ResponseField name="type" type="string">
+      Content type (article, video, website, etc.)
+    </ResponseField>
+    <ResponseField name="siteName" type="string">
+      Website name
+    </ResponseField>
+    <ResponseField name="author" type="string">
+      Content author (if available)
+    </ResponseField>
+    <ResponseField name="publishedTime" type="string">
+      Publication date (if available)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "link parsed",
+  "data": {
+    "url": "https://example.com/article",
+    "title": "Example Article",
+    "description": "This is an example article description",
+    "image": "https://example.com/preview.jpg",
+    "icon": "https://example.com/favicon.ico",
+    "type": "article",
+    "siteName": "Example Site",
+    "author": "John Doe",
+    "publishedTime": "2026-03-04T00:00:00Z"
+  }
+}
+```
+</ResponseExample>
+
+### Example Request (GET)
+
+```bash
+curl "https://api.cultus.app/parser?link=https%3A%2F%2Fexample.com%2Farticle"
+```
+
+### Example Request (POST)
+
+```bash
+curl -X POST https://api.cultus.app/parser \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "link": "https://example.com/article"
+  }'
+```
+
+### Notes
+
+- GET method is public but heavily rate-limited (10 req/min)
+- POST method requires authentication with standard rate limits
+- The parser extracts Open Graph, Twitter Card, and standard HTML metadata
+- Invalid or inaccessible URLs return a 400 error
+- Use this endpoint to preview links before creating bookmarks

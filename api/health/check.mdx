@@ -1,0 +1,164 @@
+---
+title: "Health Checks"
+description: "Monitor API and service health status"
+---
+
+## GET /health
+
+Basic health check to verify the API is running.
+
+### Response
+
+<ResponseField name="message" type="string">
+  Health status message
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "Cultus is alive and well"
+}
+```
+</ResponseExample>
+
+### Example Request
+
+```bash
+curl https://api.cultus.app/health
+```
+
+---
+
+## GET /health/deep
+
+Comprehensive health check that tests all critical system components.
+
+### Response
+
+<ResponseField name="message" type="string">
+  Health check summary
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="Health Data">
+    <ResponseField name="health" type="object">
+      <Expandable title="Health Status">
+        <ResponseField name="status" type="string">
+          Overall health: `"healthy"`, `"degraded"`, or `"unhealthy"`
+        </ResponseField>
+        <ResponseField name="timestamp" type="string">
+          Timestamp of health check
+        </ResponseField>
+        <ResponseField name="components" type="object">
+          Health status of individual components
+          <Expandable title="Components">
+            <ResponseField name="postgres" type="object">
+              PostgreSQL database status
+              <Expandable title="Component Details">
+                <ResponseField name="status" type="string">
+                  `"healthy"` or `"unhealthy"`
+                </ResponseField>
+                <ResponseField name="message" type="string">
+                  Component description
+                </ResponseField>
+                <ResponseField name="latency_ms" type="integer">
+                  Response time in milliseconds
+                </ResponseField>
+                <ResponseField name="latency_str" type="string">
+                  Human-readable latency
+                </ResponseField>
+                <ResponseField name="error" type="string">
+                  Error message (if unhealthy)
+                </ResponseField>
+              </Expandable>
+            </ResponseField>
+            <ResponseField name="cache" type="object">
+              Redis cache status (same structure as above)
+            </ResponseField>
+            <ResponseField name="queue" type="object">
+              NATS queue status (same structure as above)
+            </ResponseField>
+            <ResponseField name="socket" type="object">
+              Centrifugo WebSocket status (same structure as above)
+            </ResponseField>
+            <ResponseField name="s3" type="object">
+              S3 storage status (same structure as above)
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Status Codes
+
+- **200 OK**: System is healthy or degraded but operational
+- **503 Service Unavailable**: System is unhealthy
+
+### Health Status Levels
+
+- **healthy**: All components are functioning normally
+- **degraded**: Some components are unhealthy but core functionality works
+- **unhealthy**: Critical components are down
+
+<ResponseExample>
+```json
+{
+  "message": "Deep health check completed",
+  "data": {
+    "health": {
+      "status": "healthy",
+      "timestamp": "2026-03-04T15:30:00Z",
+      "components": {
+        "postgres": {
+          "status": "healthy",
+          "message": "PostgreSQL connection",
+          "latency_ms": 2,
+          "latency_str": "2ms"
+        },
+        "cache": {
+          "status": "healthy",
+          "message": "Redis connection",
+          "latency_ms": 1,
+          "latency_str": "1ms"
+        },
+        "queue": {
+          "status": "healthy",
+          "message": "NATS connection",
+          "latency_ms": 0,
+          "latency_str": "0ms"
+        },
+        "socket": {
+          "status": "healthy",
+          "message": "Centrifugo connection",
+          "latency_ms": 1,
+          "latency_str": "1ms"
+        },
+        "s3": {
+          "status": "healthy",
+          "message": "S3 storage connection",
+          "latency_ms": 45,
+          "latency_str": "45ms"
+        }
+      }
+    }
+  }
+}
+```
+</ResponseExample>
+
+### Example Request
+
+```bash
+curl https://api.cultus.app/health/deep
+```
+
+### Notes
+
+- Deep health checks run in parallel for fast response times
+- Each component has a 5-second timeout
+- Use this endpoint for monitoring and alerting
+- Overall status is `healthy` only if all components are healthy
+- Status is `degraded` if at least 50% of components are healthy
+- Status is `unhealthy` if more than 50% of components are down

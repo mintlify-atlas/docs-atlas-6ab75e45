@@ -1,122 +1,170 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Cultus",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#2563eb",
+    "light": "#3b82f6",
+    "dark": "#1e40af"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/linkvite/cultus"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/linkvite/cultus"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "architecture"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Authentication",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "auth/overview",
+              "auth/jwt-tokens",
+              "auth/oauth",
+              "auth/api-keys"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "concepts/bookmarks",
+              "concepts/collections",
+              "concepts/users",
+              "concepts/permissions"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Configuration",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "configuration/environment",
+              "configuration/database",
+              "configuration/storage",
+              "configuration/queue"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/production",
+              "deployment/monitoring"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Authentication",
             "pages": [
-              "api-reference/introduction"
+              "api/auth/login",
+              "api/auth/signup",
+              "api/auth/refresh-token",
+              "api/auth/otp"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Bookmarks",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/bookmarks/create",
+              "api/bookmarks/get",
+              "api/bookmarks/update",
+              "api/bookmarks/delete",
+              "api/bookmarks/star",
+              "api/bookmarks/archive",
+              "api/bookmarks/reader"
+            ]
+          },
+          {
+            "group": "Collections",
+            "pages": [
+              "api/collections/create",
+              "api/collections/get",
+              "api/collections/update",
+              "api/collections/delete",
+              "api/collections/members"
+            ]
+          },
+          {
+            "group": "Users",
+            "pages": [
+              "api/users/get",
+              "api/users/update",
+              "api/users/storage",
+              "api/users/sync"
+            ]
+          },
+          {
+            "group": "Comments",
+            "pages": [
+              "api/comments/create",
+              "api/comments/get",
+              "api/comments/delete",
+              "api/comments/like"
+            ]
+          },
+          {
+            "group": "Search",
+            "pages": [
+              "api/search/bookmarks",
+              "api/search/tenor",
+              "api/search/unsplash"
+            ]
+          },
+          {
+            "group": "RSS Feeds",
+            "pages": [
+              "api/rss/create",
+              "api/rss/get",
+              "api/rss/update",
+              "api/rss/delete"
+            ]
+          },
+          {
+            "group": "Reminders",
+            "pages": [
+              "api/reminders/create",
+              "api/reminders/get",
+              "api/reminders/update",
+              "api/reminders/delete"
+            ]
+          },
+          {
+            "group": "OAuth",
+            "pages": [
+              "api/oauth/authorize",
+              "api/oauth/token",
+              "api/oauth/apps"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/parser/parse-link",
+              "api/parser/import",
+              "api/files/upload",
+              "api/health/check"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

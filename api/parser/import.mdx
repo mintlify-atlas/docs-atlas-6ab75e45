@@ -1,0 +1,168 @@
+---
+title: "Import Bookmarks"
+description: "Import bookmarks from files or parsed data"
+---
+
+## POST /parser/html
+
+Import bookmarks from an HTML file (browser export format or Netscape bookmark file).
+
+### Authentication
+
+Requires authentication with `bookmark:write` scope.
+
+### Request
+
+Multipart form data with:
+- `file`: HTML file (text/html or text/plain)
+- `save_action`: `"auto"` (import immediately) or `"prompt"` (return parsed data for review)
+- `link_action`: `"unique"` (skip duplicates) or `"merge"` (merge with existing)
+
+### Response
+
+Returns array of parsed items with:
+- `url`: Bookmark URL
+- `title`: Bookmark title
+- `folder`: Collection name from HTML structure
+- `tags`: Comma-separated tags
+- `description`: Bookmark description (if available)
+
+---
+
+## POST /parser/text
+
+Import bookmarks from a text file containing URLs (one per line or comma-separated).
+
+### Authentication
+
+Requires authentication with `bookmark:write` scope.
+
+### Request
+
+Multipart form data with:
+- `file`: Text file containing URLs
+- `save_action`: `"auto"` or `"prompt"`
+- `link_action`: `"unique"` or `"merge"`
+
+### Response
+
+Returns array of parsed bookmark URLs.
+
+---
+
+## POST /parser/csv
+
+Import bookmarks from a CSV file with structured data.
+
+### Authentication
+
+Requires authentication with `bookmark:write` scope.
+
+### Request
+
+Multipart form data with:
+- `file`: CSV file
+- `save_action`: `"auto"` or `"prompt"`
+- `link_action`: `"unique"` or `"merge"`
+
+### CSV Format
+
+The parser automatically detects columns based on headers:
+- **URL/Link**: Required, the bookmark URL
+- **Title/Name**: Bookmark title
+- **Description/Selection**: Bookmark description
+- **Tags**: Comma-separated tags
+- **Folder**: Collection name
+- **Cover**: Custom cover image URL
+
+### Response
+
+Returns array of parsed bookmark objects with all extracted data.
+
+---
+
+## POST /parser/import
+
+Manually import parsed bookmark items (typically after using `save_action: "prompt"`).
+
+### Authentication
+
+Requires authentication with `bookmark:write` scope.
+
+### Request Body
+
+<ParamField body="items" type="array" required>
+  Array of bookmark objects to import
+  <Expandable title="Bookmark Item">
+    <ParamField body="url" type="string" required>
+      Bookmark URL (must be HTTPS)
+    </ParamField>
+    <ParamField body="title" type="string">
+      Bookmark title
+    </ParamField>
+    <ParamField body="description" type="string">
+      Bookmark description
+    </ParamField>
+    <ParamField body="tags" type="string">
+      Comma-separated tags
+    </ParamField>
+    <ParamField body="folder" type="string">
+      Collection name (will be created if it doesn't exist)
+    </ParamField>
+    <ParamField body="cover" type="string">
+      Custom cover image URL
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="link_action" type="string" required>
+  `"unique"` (skip existing URLs) or `"merge"` (merge with existing bookmarks)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "importing scheduled, you will receive a notification when it's complete"
+}
+```
+</ResponseExample>
+
+### Example Request
+
+```bash
+curl -X POST https://api.cultus.app/parser/import \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "url": "https://example.com/article1",
+        "title": "Article 1",
+        "folder": "Tech Articles",
+        "tags": "technology,programming"
+      },
+      {
+        "url": "https://example.com/article2",
+        "title": "Article 2",
+        "folder": "Tech Articles"
+      }
+    ],
+    "link_action": "unique"
+  }'
+```
+
+### Notes
+
+- All import operations are processed asynchronously
+- You'll receive a notification when import completes
+- File size limit: 50MB
+- Collections (folders) are automatically created if they don't exist
+- Duplicate detection is based on URL
+- Only HTTPS URLs are accepted
+- Import progress is not tracked; wait for completion notification

@@ -1,0 +1,201 @@
+---
+title: 'Update Bookmark'
+api: 'PATCH /bookmarks/:id'
+---
+
+Update bookmark properties including metadata, collection assignment, and status.
+
+## Update Single Bookmark
+
+`PATCH /bookmarks/:id`
+
+Update a bookmark's properties. Only provided fields will be updated.
+
+<ParamField path="id" type="string" required>
+  Bookmark ID (prefixed with `bm_`)
+</ParamField>
+
+### Request Body
+
+<ParamField body="name" type="string">
+  Update the bookmark title
+</ParamField>
+
+<ParamField body="url" type="string">
+  Update the bookmark URL
+</ParamField>
+
+<ParamField body="description" type="string">
+  Update the description (can be null to clear)
+</ParamField>
+
+<ParamField body="tags" type="string">
+  Comma-separated tags (automatically deduplicated)
+</ParamField>
+
+<ParamField body="collection" type="string">
+  Move bookmark to a different collection (use null to remove from collection)
+</ParamField>
+
+<ParamField body="status" type="string">
+  Update status:
+  - `active` - Active bookmark
+  - `trashed` - Move to trash
+</ParamField>
+
+<ParamField body="type" type="string">
+  Update content type (e.g., "website", "article", "video")
+</ParamField>
+
+<ParamField body="cover" type="string">
+  Update cover image (URL or base64 encoded image)
+</ParamField>
+
+<ParamField body="favicon" type="string">
+  Update favicon URL
+</ParamField>
+
+<ParamField body="starred" type="boolean">
+  Toggle starred status
+</ParamField>
+
+<ParamField body="allow_comments" type="boolean">
+  Allow or disable comments
+</ParamField>
+
+<RequestExample>
+```json
+{
+  "name": "Updated Title",
+  "description": "New description",
+  "tags": "important,work,reference",
+  "collection": "col_xyz789",
+  "status": "active",
+  "starred": true,
+  "allow_comments": false
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "data": {
+    "id": "bm_abc123",
+    "url": "https://example.com",
+    "title": "Updated Title",
+    "description": "New description",
+    "thumbnail": "https://example.com/image.jpg",
+    "icon": "https://example.com/favicon.ico",
+    "type": "website",
+    "status": "active",
+    "collection_id": "col_xyz789",
+    "collection_name": "Work Collection",
+    "tags": "important,work,reference",
+    "starred": true,
+    "allow_comments": false,
+    "updated_at": "2024-01-17T15:45:00Z",
+    "updated_by_id": "usr_def456",
+    "role": "admin"
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## Batch Update Bookmarks
+
+`PATCH /bookmarks/batch`
+
+Update multiple bookmarks at once. Useful for bulk operations like moving to a collection or changing status.
+
+<ParamField body="bookmarks" type="array" required>
+  Array of bookmark IDs to update (max: determined by system config)
+</ParamField>
+
+<ParamField body="collection" type="string">
+  Move all bookmarks to this collection
+</ParamField>
+
+<ParamField body="tags" type="string">
+  Set tags for all bookmarks
+</ParamField>
+
+<ParamField body="status" type="string">
+  Update status for all bookmarks:
+  - `active` - Active bookmark
+  - `trashed` - Move to trash
+</ParamField>
+
+<ParamField body="type" type="string">
+  Update content type for all bookmarks
+</ParamField>
+
+<RequestExample>
+```json
+{
+  "bookmarks": ["bm_abc123", "bm_def456", "bm_ghi789"],
+  "collection": "col_xyz789",
+  "tags": "archived,2024",
+  "status": "active"
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "message": "bookmarks updated",
+  "data": 3
+}
+```
+</ResponseExample>
+
+<Info>
+  Batch updates only affect bookmarks where you have admin-level permissions. Bookmarks you don't have permission to edit will be silently skipped.
+</Info>
+
+---
+
+## Validation Rules
+
+- **Tags**: Automatically deduplicated and empty values removed
+- **Collection**: Must be a valid collection ID where you have admin permissions
+- **Status**: Only `active` and `trashed` are valid
+- **Type**: Must be a valid content type (website, article, video, etc.)
+- **URL**: Must be a valid URL format
+- **Batch size**: Limited by system configuration (typically 50-100 items)
+
+## Permissions
+
+To update a bookmark, you must have:
+- **Admin** role on the bookmark (owner)
+- **Admin** role on the collection containing the bookmark
+
+**Viewer** role members cannot update bookmarks.
+
+## Automatic Updates
+
+- `updated_at` timestamp is automatically set to current time
+- `updated_by_id` is set to the authenticated user
+- When moving to a collection, `status` is automatically set to `active`
+- Collection's `updated_at` is also updated when bookmark is modified
+
+## Error Responses
+
+<ResponseField name="400" type="error">
+  Invalid bookmark ID, status, type, or validation error
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  No permission to update bookmark or access collection
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Bookmark or collection not found
+</ResponseField>
+
+<ResponseField name="422" type="error">
+  Validation errors in request body
+</ResponseField>

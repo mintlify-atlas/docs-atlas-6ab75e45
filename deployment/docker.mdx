@@ -1,0 +1,400 @@
+---
+title: "Docker Deployment"
+description: "Complete guide to deploying Cultus API with Docker"
+---
+
+## Overview
+
+Cultus API uses Docker for containerized deployments across development, staging, and production environments. The application uses multi-stage builds for optimized production images and includes all required services (PostgreSQL, Redis, NATS, Centrifugo).
+
+## Dockerfile Variants
+
+The deployment includes three Dockerfile configurations located in `deployments/`:
+
+### Development (Dockerfile.dev)
+
+```dockerfile
+FROM golang:latest
+
+RUN go install github.com/cosmtrek/air@latest
+
+WORKDIR /app
+
+COPY .. .
+
+RUN go mod download
+
+EXPOSE 9000
+
+CMD ["air", "-c",  ".air.toml"]
+```
+
+**Features:**
+- Uses Air for hot-reloading
+- Full Go toolchain for development
+- Exposes port **9000**
+- Volume-mounted for live code changes
+
+### Staging (Dockerfile.stg)
+
+```dockerfile
+FROM golang:1.24.5 AS base
+
+WORKDIR /app
+COPY .. .
+RUN go mod download
+RUN make build TARGET_DIR=cultus-stg
+
+FROM alpine:3.14
+
+WORKDIR /root/
+
+COPY --from=base /app/cultus-stg /app
+COPY --from=base /app/views/ views/
+
+EXPOSE 9002
+
+CMD ["/app"]
+```
+
+**Features:**
+- Multi-stage build for smaller image size
+- Alpine Linux base (~5MB)
+- Exposes port **9002**
+- Includes views directory for templates
+
+### Production (Dockerfile.prod)
+
+```dockerfile
+FROM golang:1.24.5 AS base
+
+WORKDIR /app
+COPY .. .
+RUN go mod download
+RUN make build TARGET_DIR=cultus
+
+FROM alpine:3.20
+
+WORKDIR /root/
+
+COPY --from=base /app/cultus /app
+COPY --from=base /app/views/ views/
+
+EXPOSE 9001
+
+CMD ["/app"]
+```
+
+**Features:**
+- Multi-stage build for optimized size
+- Alpine Linux 3.20 for security updates
+- Exposes port **9001**
+- Production-ready binary
+
+## Required Services
+
+Cultus API depends on the following services:
+
+| Service | Image | Purpose | Port |
+|---------|-------|---------|------|
+| **PostgreSQL** | N/A | Primary database | External |
+| **Redis** | redis:alpine | Caching layer | 6379 |
+| **NATS** | nats:alpine | Message queue with JetStream | 4222-4223 |
+| **Centrifugo** | centrifugo/centrifugo:v5.4 | WebSocket server | 8000 |
+
+## Docker Compose Setup
+
+### Base Configuration (docker-compose.base.yml)
+
+Shared services across all environments:
+
+```yaml
+services:
+  redis:
+    container_name: redis
+    image: redis:alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    restart: unless-stopped
+    networks:
+      - linkvite
+
+  centrifugo:
+    container_name: centrifugo
+    image: centrifugo/centrifugo:v5.4
+    volumes:
+      - ../centrifugo.json:/centrifugo/centrifugo.json
+    command: centrifugo -c centrifugo.json
+    ports:
+      - 8000:8000
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    networks:
+      - linkvite
+
+networks:
+  linkvite:
+    name: linkvite
+    driver: bridge
+```
+
+### Development (docker-compose.dev.yml)
+
+```yaml
+services:
+  nats-dev:
+    container_name: nats-dev
+    image: nats:alpine
+    ports:
+      - 4223:4223
+      - 6223:6223
+      - 8223:8223
+    command: --js -p 4223
+    networks:
+      - linkvite
+
+  app-dev:
+    container_name: app-dev
+    build:
+      context: ../
+      dockerfile: ./deployments/Dockerfile.dev
+    ports:
+      - "9000:9000"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - nats-dev
+      - centrifugo
+    env_file:
+      - ../.env.dev
+    volumes:
+      - ../:/app-dev
+      - ../.env.dev:/app-dev/.env
+    networks:
+      - linkvite
+```
+
+**Start development environment:**
+```bash
+make start-docker
+# or
+docker compose -f ./deployments/docker-compose.base.yml -f ./deployments/docker-compose.dev.yml up -d --build
+```
+
+### Staging (docker-compose.stg.yml)
+
+```yaml
+services:
+  nats-dev:
+    container_name: nats-dev
+    image: nats:alpine
+    command: --js -p 4223
+    networks:
+      - linkvite
+
+  app-staging:
+    container_name: app-staging
+    build:
+      context: ../
+      dockerfile: ./deployments/Dockerfile.stg
+    ports:
+      - "9002:9002"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - nats-dev
+      - centrifugo
+    env_file:
+      - ../.env.staging
+    networks:
+      - linkvite
+```
+
+**Start staging environment:**
+```bash
+make start-stg
+# or
+docker compose -f ./deployments/docker-compose.base.yml -f ./deployments/docker-compose.stg.yml up -d --build
+```
+
+### Production (docker-compose.prod.yml)
+
+```yaml
+services:
+  nats:
+    container_name: nats
+    image: nats:alpine
+    command: --js -p 4222
+    networks:
+      - linkvite
+
+  app-prod:
+    container_name: app-prod
+    build:
+      context: ../
+      dockerfile: ./deployments/Dockerfile.prod
+    ports:
+      - "9001:9001"
+    restart: unless-stopped
+    depends_on:
+      - nats
+      - redis
+      - centrifugo
+    env_file:
+      - ../.env.prod
+    networks:
+      - linkvite
+```
+
+**Start production environment:**
+```bash
+make start-prod
+# or
+docker compose -f ./deployments/docker-compose.base.yml -f ./deployments/docker-compose.prod.yml up -d --build
+```
+
+## Volume Mounts
+
+### Development
+- **Application code**: `../:/app-dev` - Enables hot-reloading
+- **Environment file**: `../.env.dev:/app-dev/.env`
+
+### Staging & Production
+- **Centrifugo config**: `../centrifugo.json:/centrifugo/centrifugo.json`
+- No application volumes (baked into image)
+
+## Networking
+
+All services run on the `linkvite` bridge network:
+
+- Enables inter-service communication
+- Containers can reference each other by service name
+- Example: Application connects to Redis at `redis://redis:6379`
+
+## Port Mapping
+
+| Environment | Application Port | NATS Port | Redis Port | Centrifugo Port |
+|-------------|------------------|-----------|------------|-----------------|
+| Development | 9000 | 4223 | 6379 | 8000 |
+| Staging | 9002 | 4223 | 6379 | 8000 |
+| Production | 9001 | 4222 | 6379 | 8000 |
+
+## Health Checks
+
+The application exposes health check endpoints:
+
+- **GET /health** - Basic health check
+- **GET /health/deep** - Comprehensive health check of all dependencies
+
+See [Monitoring](/deployment/monitoring) for details on health check implementation.
+
+## Running Migrations
+
+Database migrations are stored in the `sql/` directory:
+
+```bash
+# List migrations
+ls sql/*.sql
+
+# Migrations include:
+# - 0001_users.sql
+# - 0002_api_keys.sql
+# - 0003_collections.sql
+# - 0004_bookmarks.sql
+# ... and more
+```
+
+### Running Migrations in Docker
+
+**Option 1: Using docker exec**
+```bash
+# Access the running container
+docker exec -it app-prod sh
+
+# Run migrations manually or via script
+psql $POSTGRES_DSN < sql/0001_users.sql
+```
+
+**Option 2: Migration container**
+Create a separate migration service in your docker-compose:
+
+```yaml
+services:
+  migrate:
+    image: migrate/migrate
+    volumes:
+      - ./sql:/migrations
+    command: [
+      "-path", "/migrations",
+      "-database", "${POSTGRES_DSN}",
+      "up"
+    ]
+    depends_on:
+      - postgres
+```
+
+**Option 3: Pre-startup script**
+Modify the Dockerfile CMD to run migrations before starting:
+
+```dockerfile
+CMD ["sh", "-c", "psql $POSTGRES_DSN < /app/sql/*.sql && /app"]
+```
+
+## Build Process
+
+The build uses the Makefile:
+
+```makefile
+CGO_ENABLED=0 go build -o ${TARGET_DIR}
+```
+
+**Key build settings:**
+- `CGO_ENABLED=0` - Static binary for Alpine Linux
+- Custom target directory per environment
+- Includes views directory for HTML templates
+
+## Running Local Infrastructure Only
+
+To run just the services without the application:
+
+```bash
+make start-local-infra
+# Starts: redis, nats-dev, centrifugo
+# Then runs app locally with Air hot-reload
+```
+
+## Troubleshooting
+
+### Container won't start
+```bash
+# Check logs
+docker logs app-prod
+
+# Check all services
+docker compose -f deployments/docker-compose.base.yml -f deployments/docker-compose.prod.yml logs
+```
+
+### Connection refused errors
+- Verify all services are running: `docker ps`
+- Check network: `docker network inspect linkvite`
+- Verify environment variables are set correctly
+
+### Port already in use
+```bash
+# Find process using port
+lsof -i :9001
+
+# Kill process or change port mapping
+```
+
+### Centrifugo not connecting
+- Ensure `centrifugo.json` exists in project root
+- Check ulimits are applied correctly
+- Verify `CENTRIFUGO_URL` in environment variables
+
+## Next Steps
+
+- [Production Deployment Checklist](/deployment/production)
+- [Monitoring and Observability](/deployment/monitoring)

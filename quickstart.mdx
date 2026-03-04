@@ -1,80 +1,388 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Get the Cultus API running locally in minutes
 ---
 
-## Get started in three steps
+This guide will help you get the Cultus API (Linkvite backend) running on your local machine.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have the following installed:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- **Docker** and **Docker Compose** (for containerized setup)
+- **Go 1.21+** (for local development)
+- **PostgreSQL** (if running without Docker)
+- **Redis** (for caching)
+- **NATS** (for message queue)
 
-### Step 2: Deploy your changes
+## Environment setup
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Cultus repository to your local machine:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash
+    git clone <repository-url>
+    cd cultus
+    ```
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Configure environment variables">
+    Copy the example environment file and configure it:
 
-### Step 3: Go live
+    ```bash
+    cp .env.example .env.dev
+    ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    Update `.env.dev` with your configuration. Here are the key variables you need to set:
+
+    ```bash .env.dev
+    # Application
+    APP_ENV=development
+    APP_NAME=Cultus
+    PORT=9000
+    ALLOWED_ORIGINS=*
+
+    # Database
+    POSTGRES_DSN=postgres://user:password@localhost:5432/cultus?sslmode=disable
+
+    # Cache
+    REDIS_DSN=redis://localhost:6379
+
+    # Message Queue
+    NATS_URL=nats-dev://localhost:4223
+
+    # WebSocket (Centrifugo)
+    CENTRIFUGO_URL=ws://localhost:8000/connection/websocket
+    CENTRIFUGO_ADMIN_SECRET=your-secret-here
+    CENTRIFUGO_ADMIN_PWD=your-password-here
+
+    # Authentication
+    JWT_SECRET=your-jwt-secret-here
+    HASH_SECRET=your-hash-secret-here
+
+    # S3-Compatible Storage (Wasabi, AWS, etc.)
+    AWS_ACCESS_KEY=your-access-key
+    AWS_SECRET_KEY=your-secret-key
+    AWS_BUCKET_NAME=your-bucket-name
+    AWS_REGION=us-east-1
+    AWS_ENDPOINT=https://s3.wasabisys.com
+
+    # Optional: Email (Resend)
+    RESEND_SECRET=your-resend-api-key
+    RESEND_ORIGIN=noreply@yourdomain.com
+
+    # Optional: OAuth
+    GOOGLE_CLIENT_ID=your-google-client-id
+    GOOGLE_CLIENT_SECRET=your-google-client-secret
+    APPLE_CLIENT_ID=your-apple-client-id
+
+    # Optional: Monitoring
+    SENTRY_DSN=your-sentry-dsn
+    ```
+
+    <Note>
+      For local development, you can use placeholder values for optional services like email and OAuth. The core functionality will work without them.
+    </Note>
+  </Step>
+
+  <Step title="Run database migrations">
+    The database schema is located in the `sql/` directory. Apply migrations in order:
+
+    ```bash
+    # Connect to your PostgreSQL database
+    psql $POSTGRES_DSN -f sql/0001_users.sql
+    psql $POSTGRES_DSN -f sql/0002_api_keys.sql
+    psql $POSTGRES_DSN -f sql/0003_collections.sql
+    psql $POSTGRES_DSN -f sql/0004_bookmarks.sql
+    psql $POSTGRES_DSN -f sql/0005_comments.sql
+    psql $POSTGRES_DSN -f sql/0006_highlights.sql
+    psql $POSTGRES_DSN -f sql/0007_invite_links\ copy.sql
+    psql $POSTGRES_DSN -f sql/0008_invites.sql
+    psql $POSTGRES_DSN -f sql/0009_bookmark_stars.sql
+    psql $POSTGRES_DSN -f sql/0010_members.sql
+    psql $POSTGRES_DSN -f sql/0011_notifications.sql
+    psql $POSTGRES_DSN -f sql/0012_reminders.sql
+    psql $POSTGRES_DSN -f sql/0013_wait_lists.sql
+    psql $POSTGRES_DSN -f sql/0014_external_accounts.sql
+    psql $POSTGRES_DSN -f sql/0015_comment_likes.sql
+    psql $POSTGRES_DSN -f sql/0016_custom_apps.sql
+    psql $POSTGRES_DSN -f sql/0017_oauth_session.sql
+    psql $POSTGRES_DSN -f sql/0018_rss_feeds.sql
+    ```
+
+    <Tip>
+      If using Docker (next step), the database will be created automatically, but you'll still need to run migrations manually.
+    </Tip>
+  </Step>
+</Steps>
+
+## Running with Docker
+
+The easiest way to run Cultus locally is with Docker Compose:
+
+<Steps>
+  <Step title="Start all services">
+    Run the following command to start Redis, NATS, Centrifugo, and the Cultus API:
+
+    ```bash
+    make start-docker
+    ```
+
+    This runs:
+    ```bash
+    docker compose -f ./deployments/docker-compose.base.yml \
+      -f ./deployments/docker-compose.dev.yml up -d --build
+    ```
+  </Step>
+
+  <Step title="Verify services are running">
+    Check that all containers are up:
+
+    ```bash
+    docker ps
+    ```
+
+    You should see:
+    - `app-dev` (Cultus API on port 9000)
+    - `redis` (on port 6379)
+    - `nats-dev` (on ports 4223, 6223, 8223)
+    - `centrifugo` (on port 8000)
+  </Step>
+
+  <Step title="Check API health">
+    Test the API is responding:
+
+    ```bash
+    curl http://localhost:9000/health
+    ```
+
+    Expected response:
+    ```json
+    {
+      "message": "OK",
+      "data": {
+        "status": "healthy"
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Running locally (without Docker)
+
+For development with hot reload:
+
+<Steps>
+  <Step title="Start infrastructure services">
+    Start only Redis, NATS, and Centrifugo with Docker:
+
+    ```bash
+    make start-local-infra
+    ```
+
+    Or start them individually:
+    ```bash
+    docker compose -f ./deployments/docker-compose.base.yml up -d redis nats-dev centrifugo
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    go mod download
+    ```
+  </Step>
+
+  <Step title="Run with Air (hot reload)">
+    If using Infisical for secrets:
+    ```bash
+    make start-dev
+    ```
+
+    Or run directly:
+    ```bash
+    air -c .air.toml
+    ```
+
+    Or without hot reload:
+    ```bash
+    go run main.go
+    ```
+  </Step>
+</Steps>
+
+<Info>
+  Air provides hot reload during development. The configuration is in `.air.toml` at the project root.
+</Info>
+
+## Make your first API request
+
+<Steps>
+  <Step title="Create a user account">
+    Sign up with a new account:
+
+    ```bash
+    curl -X POST http://localhost:9000/v1/auth/signup \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "user@example.com",
+        "username": "testuser",
+        "password": "password123"
+      }'
+    ```
+
+    Response:
+    ```json
+    {
+      "message": "Welcome to Linkvite!",
+      "data": {
+        "user": {
+          "public_id": "usr_...",
+          "username": "testuser",
+          "email": "user@example.com",
+          "email_verified": false,
+          "account_type": "free"
+        },
+        "access_token": "eyJhbGc...",
+        "refresh_token": "eyJhbGc..."
+      }
+    }
+    ```
+
+    <Note>
+      In production mode, users must be on the waitlist to sign up. In development mode, anyone can create an account.
+    </Note>
+  </Step>
+
+  <Step title="Login to get tokens">
+    If you already have an account, login:
+
+    ```bash
+    curl -X POST http://localhost:9000/v1/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{
+        "identifier": "testuser",
+        "password": "password123"
+      }'
+    ```
+
+    Response:
+    ```json
+    {
+      "message": "Welcome back!",
+      "data": {
+        "user": {...},
+        "access_token": "eyJhbGc...",
+        "refresh_token": "eyJhbGc..."
+      }
+    }
+    ```
+
+    Save the `access_token` for authenticated requests.
+  </Step>
+
+  <Step title="Create a bookmark">
+    Use the access token to create a bookmark:
+
+    ```bash
+    curl -X POST http://localhost:9000/v1/bookmarks \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+      -d '{
+        "url": "https://github.com",
+        "title": "GitHub",
+        "description": "Where the world builds software"
+      }'
+    ```
+
+    Response:
+    ```json
+    {
+      "message": "Bookmark created successfully",
+      "data": {
+        "public_id": "bmk_...",
+        "url": "https://github.com",
+        "title": "GitHub",
+        "description": "Where the world builds software",
+        "created_at": "2026-03-04T10:30:00Z"
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Get your bookmarks">
+    Retrieve all bookmarks for the authenticated user:
+
+    ```bash
+    curl -X GET http://localhost:9000/v1/bookmarks \
+      -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+    ```
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand how Cultus is structured internally
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference">
+    Explore all available endpoints
+  </Card>
+  <Card title="Authentication" icon="key" href="/api-reference/auth/signup">
+    Learn about authentication flows
+  </Card>
+  <Card title="Bookmarks" icon="bookmark" href="/api-reference/bookmarks/create">
+    Work with bookmarks and collections
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Troubleshooting
+
+<Accordion title="Connection refused errors">
+  Make sure all infrastructure services are running:
+  
+  ```bash
+  docker ps
+  ```
+  
+  Check that Redis, NATS, and Centrifugo containers are up. Restart if needed:
+  
+  ```bash
+  docker compose -f ./deployments/docker-compose.base.yml restart
+  ```
+</Accordion>
+
+<Accordion title="Database connection errors">
+  Verify your `POSTGRES_DSN` is correct in `.env.dev`:
+  
+  ```bash
+  # Test connection
+  psql $POSTGRES_DSN -c "SELECT 1;"
+  ```
+  
+  Ensure all migrations have been applied in order.
+</Accordion>
+
+<Accordion title="JWT secret errors">
+  Make sure you've set `JWT_SECRET` and `HASH_SECRET` in your `.env.dev` file:
+  
+  ```bash
+  JWT_SECRET=$(openssl rand -base64 32)
+  HASH_SECRET=$(openssl rand -base64 32)
+  ```
+</Accordion>
+
+<Accordion title="WebSocket connection issues">
+  Verify Centrifugo is running and accessible:
+  
+  ```bash
+  curl http://localhost:8000/health
+  ```
+  
+  Check that `CENTRIFUGO_URL` in `.env.dev` matches the running instance.
+</Accordion>
+
+<Warning>
+  The API enforces HTTPS in production mode. Set `APP_ENV=development` for local testing.
+</Warning>

@@ -1,0 +1,362 @@
+---
+title: Collections
+description: Understanding collections and collaboration features in Cultus
+---
+
+## Overview
+
+Collections are organizational containers for bookmarks in Cultus. They support nested hierarchies, collaboration, and fine-grained access control.
+
+## Collection Model
+
+The collection model defines how content is organized:
+
+### Core Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Public identifier for the collection |
+| `user_id` | string | Collection owner |
+| `name` | string | Collection name (required) |
+| `description` | string | Optional description |
+| `status` | enum | `active` or `inactive` |
+| `thumbnail` | string | Cover image URL |
+| `icon` | string | Collection icon URL |
+| `views` | integer | View count |
+| `created_at` | timestamp | Creation timestamp |
+| `updated_at` | timestamp | Last update timestamp |
+| `last_opened_at` | timestamp | Last view timestamp |
+| `updated_by_id` | string | User who last updated the collection |
+
+### Privacy Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `is_private` | boolean | Whether the collection is private (default: `true`) |
+| `allow_public_join` | boolean | Whether users can join without invitation (default: `false`) |
+
+### Hierarchy Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `parent_id` | string | Parent collection identifier (null for root collections) |
+
+## Collection Hierarchy
+
+Collections support nested organization:
+
+### Root Collections
+
+Collections with no `parent_id` are root-level:
+
+```json
+{
+  "name": "Work Projects",
+  "parent_id": null
+}
+```
+
+### Nested Collections
+
+Collections can be nested by setting `parent_id`:
+
+```json
+{
+  "name": "Q1 2024",
+  "parent_id": "col_work123"
+}
+```
+
+### Hierarchy Features
+
+- **Unlimited nesting:** Collections can be nested to any depth
+- **Parent access:** Users with access to a parent collection don't automatically have access to children
+- **Independent privacy:** Each collection has its own privacy settings
+- **Move operations:** Collections can be moved to different parents
+
+## Privacy Modes
+
+Collections have two privacy modes:
+
+### Private Collections
+
+**Default behavior** (`is_private: true`):
+
+- Only visible to owner and invited members
+- Bookmarks are not publicly accessible
+- Requires explicit invitation to join
+- Suitable for personal and sensitive content
+
+### Public Collections
+
+**Public mode** (`is_private: false`):
+
+- Visible to all users
+- Bookmarks are publicly accessible (read-only)
+- Can optionally allow public joining via `allow_public_join`
+- Suitable for shared knowledge bases
+
+### Public Join
+
+When `allow_public_join: true`:
+
+- Any user can join the collection as a viewer
+- No invitation required
+- Useful for community collections
+- Owner retains admin control
+
+## Member Roles
+
+Collections support two role levels:
+
+### Admin Role
+
+**Full control** (`role: "admin"`):
+
+- Edit collection settings (name, description, privacy)
+- Upload custom covers
+- Invite and remove members
+- Change member roles
+- Create, edit, and delete bookmarks
+- Delete the collection
+- Manage invite links
+
+**Automatically assigned to:**
+- Collection owner
+
+### Viewer Role
+
+**Read and contribute** (`role: "viewer"`):
+
+- View all bookmarks in the collection
+- Create new bookmarks
+- Edit and delete their own bookmarks
+- Comment on bookmarks (if enabled)
+- Star bookmarks
+
+**Cannot:**
+- Edit collection settings
+- Invite members
+- Delete others' bookmarks
+- Delete the collection
+
+## Collaboration
+
+Collections enable team collaboration:
+
+### Inviting Members
+
+**Direct invitations** send to specific users:
+
+```json
+{
+  "identifier": "user@example.com",
+  "role": "viewer"
+}
+```
+
+Invitations:
+- Are sent to the recipient's email or username
+- Have status: `pending`, `accepted`, `declined`, `expired`, `revoked`
+- Can optionally expire after a set time
+- Can be revoked before acceptance
+
+### Invite Links
+
+**Shareable links** allow bulk invitations:
+
+```typescript
+interface InviteLink {
+  id: string
+  collection_id: string
+  role: "admin" | "viewer"
+  status: "active" | "inactive" | "revoked"
+  usage_count: number
+  max_usage_count?: number  // Optional limit
+  expires_at?: timestamp    // Optional expiration
+  created_at: timestamp
+}
+```
+
+Invite links:
+- Can be shared with multiple users
+- Have optional usage limits
+- Can expire after a date
+- Can be revoked by admins
+- Track usage count
+
+### Member Management
+
+**Viewing members:**
+```http
+GET /v1/collections/{id}/members
+```
+
+**Editing member roles:**
+```json
+{
+  "user_id": "usr_abc123",
+  "role": "admin"
+}
+```
+
+**Removing members:**
+```json
+{
+  "user_id": "usr_abc123",
+  "remove": true
+}
+```
+
+## Access Control
+
+Access to collections is determined by:
+
+### Ownership
+
+The collection owner (`user_id`) always has admin access.
+
+### Membership
+
+Users can be members via:
+- Direct invitation (stored in `invites` table)
+- Invite link (stored in `invite_links` table)
+- Public join (if `allow_public_join: true`)
+
+Membership is stored in the `members` table:
+
+```typescript
+interface Member {
+  id: string
+  user_id: string
+  collection_id: string
+  role: "admin" | "viewer"
+  created_at: timestamp
+  updated_at: timestamp
+}
+```
+
+### Privacy-Based Access
+
+**Private collections:**
+- Owner has full access
+- Members have role-based access
+- Non-members have no access
+
+**Public collections:**
+- Owner has full access
+- Members have role-based access
+- Non-members have read-only access
+
+## Collection Status
+
+Collections can be:
+
+- **`active`:** Normal state, visible and accessible
+- **`inactive`:** Archived or disabled, not visible in lists
+
+Inactive collections:
+- Are not shown in user's collection lists
+- Are still accessible by direct ID (for owners/admins)
+- Can be reactivated
+- Are automatically cleaned up after a retention period
+
+## Icons and Thumbnails
+
+Collections can have custom visual identity:
+
+### Icons
+
+Default folder icons are provided:
+```
+{assets_url}/icons/folders/icons8-folder-500.png
+```
+
+Users can upload custom icons.
+
+### Thumbnails
+
+Custom cover images can be uploaded to personalize collections. When removed, previous images are deleted from storage.
+
+## Views and Analytics
+
+Collections track:
+
+- **View count:** Number of times the collection was opened
+- **Last opened:** Timestamp of most recent view
+- **Updated by:** User who last made changes
+
+These enable:
+- Popular collection discovery
+- Activity tracking
+- Recency sorting
+
+## Sub-Collections
+
+When querying a collection, sub-collections can be included:
+
+```typescript
+interface SubCollection {
+  id: string
+  name: string
+  description: string
+  thumbnail: string
+  icon: string
+}
+```
+
+This enables:
+- Breadcrumb navigation
+- Hierarchical browsing
+- Quick access to nested collections
+
+## Storage and Limits
+
+Collections themselves don't consume storage quota, but:
+
+- Bookmarks within collections count toward user storage
+- File uploads are attributed to the bookmark creator
+- Custom covers count toward user storage
+
+## Deleting Collections
+
+When a collection is deleted:
+
+1. All bookmarks in the collection are moved to trash
+2. All sub-collections remain but become root collections
+3. All members are removed
+4. All invitations are revoked
+5. All invite links are deactivated
+6. Custom covers are removed from storage
+
+**Note:** Deleting a collection does not delete bookmarks permanently. Users can recover bookmarks from trash.
+
+## Best Practices
+
+### Organization
+
+- Use nested collections for hierarchical content
+- Keep collection names concise
+- Use descriptions to clarify purpose
+- Set appropriate privacy levels
+
+### Collaboration
+
+- Assign admin role sparingly
+- Use viewer role for most collaborators
+- Set expiration on invite links
+- Review members periodically
+
+### Privacy
+
+- Default to private for sensitive content
+- Enable public join only for community collections
+- Review public collection content regularly
+- Document collaboration expectations in description
+
+## Related Resources
+
+- [Bookmarks](/concepts/bookmarks) - Content within collections
+- [Permissions](/concepts/permissions) - Access control details
+- [Users](/concepts/users) - Member profiles
+- [Collections API](/api-reference/collections) - API endpoints

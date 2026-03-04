@@ -1,0 +1,425 @@
+---
+title: Search Unsplash Images
+api: GET /search/unsplash
+---
+
+Search for high-quality stock photos using the Unsplash API integration. This endpoint allows Pro users to search and retrieve professional images for use in bookmarks and collections.
+
+<Warning>
+  This endpoint requires a Pro subscription.
+</Warning>
+
+<Note>
+  This endpoint requires authentication and the `search:read` scope.
+</Note>
+
+## Query Parameters
+
+<ParamField query="q" type="string" required>
+  The search query for finding images. This parameter is **required**.
+  
+  **Examples:**
+  - `mountain landscape`
+  - `coffee cup`
+  - `abstract technology`
+</ParamField>
+
+## Response
+
+<ResponseField name="data" type="array">
+  Array of photo objects from Unsplash.
+  
+  <Expandable title="properties">
+    <ResponseField name="id" type="string">
+      Unique identifier for the photo
+    </ResponseField>
+    <ResponseField name="color" type="string">
+      Dominant color of the image in hexadecimal format (e.g., `#FF5733`)
+    </ResponseField>
+    <ResponseField name="full" type="string">
+      URL to the full-resolution image
+    </ResponseField>
+    <ResponseField name="small" type="string">
+      URL to a small version of the image (optimized for thumbnails)
+    </ResponseField>
+    <ResponseField name="regular" type="string">
+      URL to a regular-sized version of the image (optimized for most use cases)
+    </ResponseField>
+    <ResponseField name="alt" type="string">
+      Alternative text description of the image
+    </ResponseField>
+    <ResponseField name="user_name" type="string">
+      Name of the photographer
+    </ResponseField>
+    <ResponseField name="user_link" type="string">
+      URL to the photographer's Unsplash profile
+    </ResponseField>
+    <ResponseField name="download" type="string">
+      Download tracking URL (required for Unsplash attribution)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Pro Subscription Required
+
+This endpoint is restricted to Pro users. Attempting to use this endpoint without a Pro subscription will result in a 403 Forbidden error.
+
+**Benefits for Pro users:**
+- Access to millions of high-quality, professional photos
+- Multiple image sizes optimized for different use cases
+- Photographer attribution information
+- Dominant color information for UI theming
+
+## Download Tracking
+
+<Warning>
+  **Unsplash API Guidelines:** When a user downloads or uses an Unsplash photo, you must track the download using the `/search/unsplash/track` endpoint. This is required by Unsplash's API guidelines.
+</Warning>
+
+After a user selects an image, send a POST request to track the download:
+
+```javascript
+await fetch('https://api.cultus.app/search/unsplash/track', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    link: photo.download // Use the download URL from the search response
+  })
+});
+```
+
+See the [Track Unsplash Download](/api/search/unsplash#track-download) section below for details.
+
+## Examples
+
+### Search for Nature Photos
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.cultus.app/search/unsplash?q=nature" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.cultus.app/search/unsplash?q=nature', {
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN'
+  }
+});
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.cultus.app/search/unsplash',
+    params={'q': 'nature'},
+    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+data = response.json()
+```
+</CodeGroup>
+
+### Search for Technology Images
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.cultus.app/search/unsplash?q=technology" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.cultus.app/search/unsplash?q=technology', {
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN'
+  }
+});
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.cultus.app/search/unsplash',
+    params={'q': 'technology'},
+    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+data = response.json()
+```
+</CodeGroup>
+
+## Response Example
+
+```json
+{
+  "data": [
+    {
+      "id": "abc123xyz",
+      "color": "#2C3E50",
+      "full": "https://images.unsplash.com/photo-123?w=2400",
+      "small": "https://images.unsplash.com/photo-123?w=400",
+      "regular": "https://images.unsplash.com/photo-123?w=1080",
+      "alt": "Mountain landscape with lake reflection",
+      "user_name": "John Photographer",
+      "user_link": "https://unsplash.com/@johnphoto",
+      "download": "https://api.unsplash.com/photos/abc123xyz/download"
+    },
+    {
+      "id": "def456uvw",
+      "color": "#E74C3C",
+      "full": "https://images.unsplash.com/photo-456?w=2400",
+      "small": "https://images.unsplash.com/photo-456?w=400",
+      "regular": "https://images.unsplash.com/photo-456?w=1080",
+      "alt": "Sunset over mountain peaks",
+      "user_name": "Jane Doe",
+      "user_link": "https://unsplash.com/@janedoe",
+      "download": "https://api.unsplash.com/photos/def456uvw/download"
+    }
+  ]
+}
+```
+
+## Track Download
+
+<api>POST /search/unsplash/track</api>
+
+Track when a user downloads or uses an Unsplash photo. This is **required** by Unsplash's API guidelines.
+
+### Request Body
+
+<ParamField body="link" type="string" required>
+  The download URL from the photo object (`download` field). Must be a valid URL.
+</ParamField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.cultus.app/search/unsplash/track" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "link": "https://api.unsplash.com/photos/abc123xyz/download"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.cultus.app/search/unsplash/track', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    link: 'https://api.unsplash.com/photos/abc123xyz/download'
+  })
+});
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.cultus.app/search/unsplash/track',
+    json={'link': 'https://api.unsplash.com/photos/abc123xyz/download'},
+    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+data = response.json()
+```
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "data": {
+    "message": "download tracked"
+  }
+}
+```
+
+## Error Responses
+
+<ResponseField name="400 Bad Request" type="error">
+  Missing required query parameter.
+  ```json
+  {
+    "error": {
+      "message": "query is required"
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="403 Forbidden" type="error">
+  Pro subscription required.
+  ```json
+  {
+    "error": {
+      "message": "you need to be a pro user to use Unsplash"
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="400 Bad Request" type="error">
+  Unsplash API search failed.
+  ```json
+  {
+    "error": {
+      "message": "failed to search Unsplash, please try again"
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="422 Unprocessable Entity" type="error">
+  Invalid request body for track endpoint.
+  ```json
+  {
+    "error": {
+      "errors": [
+        {
+          "field": "link",
+          "message": "link is required and must be a valid URL"
+        }
+      ]
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="401 Unauthorized" type="error">
+  Missing or invalid authentication token.
+</ResponseField>
+
+## Usage Tips
+
+<Tip>
+  **Optimize image loading:** Use the `small` URL for thumbnails and grid views, `regular` for most displays, and `full` only when users need the highest quality.
+</Tip>
+
+<Tip>
+  **Always attribute photographers:** Display the photographer's name (`user_name`) and link to their profile (`user_link`) to comply with Unsplash's attribution requirements.
+</Tip>
+
+<Tip>
+  **Use dominant color:** The `color` field can be used to set placeholder backgrounds while images load, creating a smoother user experience.
+</Tip>
+
+<Tip>
+  **Track downloads:** Always call the track endpoint when a user downloads or uses an image. This helps photographers gain recognition and is required by Unsplash's API terms.
+</Tip>
+
+## Integration Example
+
+Here's a complete example of integrating Unsplash image search with proper download tracking:
+
+```javascript
+class UnsplashIntegration {
+  constructor(token) {
+    this.token = token;
+    this.baseUrl = 'https://api.cultus.app';
+  }
+
+  async searchPhotos(query) {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/search/unsplash?q=${encodeURIComponent(query)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.token}`
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error.message);
+      }
+      
+      const { data } = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Photo search failed:', error.message);
+      throw error;
+    }
+  }
+
+  async trackDownload(downloadUrl) {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/search/unsplash/track`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ link: downloadUrl })
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error.message);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Download tracking failed:', error.message);
+      throw error;
+    }
+  }
+
+  async selectPhoto(photo) {
+    // Track the download when user selects a photo
+    await this.trackDownload(photo.download);
+    
+    // Return the photo data for use in your application
+    return {
+      url: photo.regular,
+      alt: photo.alt,
+      photographer: photo.user_name,
+      photographerUrl: photo.user_link,
+      color: photo.color
+    };
+  }
+}
+
+// Usage
+const unsplash = new UnsplashIntegration('YOUR_TOKEN');
+
+// Search for photos
+const photos = await unsplash.searchPhotos('mountain');
+
+// When user selects a photo
+const selectedPhoto = await unsplash.selectPhoto(photos[0]);
+console.log('Selected photo:', selectedPhoto);
+```
+
+## Unsplash Attribution
+
+When displaying Unsplash photos in your application, you must provide proper attribution:
+
+```html
+<figure>
+  <img src="{photo.regular}" alt="{photo.alt}" />
+  <figcaption>
+    Photo by 
+    <a href="{photo.user_link}" target="_blank" rel="noopener">
+      {photo.user_name}
+    </a>
+    on 
+    <a href="https://unsplash.com" target="_blank" rel="noopener">
+      Unsplash
+    </a>
+  </figcaption>
+</figure>
+```

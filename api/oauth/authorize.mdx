@@ -1,0 +1,98 @@
+---
+title: "OAuth Authorization"
+description: "Initiate OAuth authorization flow for third-party apps"
+---
+
+## GET /oauth/authorize
+
+Start the OAuth authorization flow to grant a third-party application access to your Cultus account.
+
+### Authentication
+
+Requires user to be logged in (cookie-based authentication with redirect).
+
+### Query Parameters
+
+<ParamField query="client_id" type="string" required>
+  The public client ID of the application requesting access
+</ParamField>
+
+<ParamField query="redirect_uri" type="string" required>
+  The URI to redirect to after authorization. Must match the app's registered redirect URI
+</ParamField>
+
+### Response
+
+Returns an HTML page where the user can:
+- Review the app's requested permissions (scopes)
+- Grant or deny access to the application
+- See app information (name, description, logo)
+
+### Authorization Flow
+
+1. **Initial Request**: User is redirected to this endpoint from the third-party app
+2. **Review Page**: User sees app details and requested permissions
+3. **Decision**: User clicks "Grant Access" or "Deny"
+4. **Redirect**: User is redirected back to the app's `redirect_uri` with:
+   - On success: `access_token`, `refresh_token`, and expiration times
+   - On error: `error` and `error_description` parameters
+
+### Success Redirect Parameters
+
+After granting access, the user is redirected to:
+
+```
+https://app.example.com/callback?access_token=...&refresh_token=...&access_token_expires_in=...&refresh_token_expires_in=...&token_type=bearer
+```
+
+<ParamField query="access_token" type="string">
+  JWT access token for API requests
+</ParamField>
+
+<ParamField query="refresh_token" type="string">
+  Refresh token to obtain new access tokens
+</ParamField>
+
+<ParamField query="access_token_expires_in" type="integer">
+  Access token lifetime in seconds
+</ParamField>
+
+<ParamField query="refresh_token_expires_in" type="integer">
+  Refresh token lifetime in seconds
+</ParamField>
+
+<ParamField query="token_type" type="string">
+  Always `"bearer"`
+</ParamField>
+
+### Error Redirect Parameters
+
+On error or denial, the user is redirected to:
+
+```
+https://app.example.com/callback?error=...&error_description=...
+```
+
+<ParamField query="error" type="string">
+  Error code: `"access_denied"`, `"invalid_app"`, or `"internal_error"`
+</ParamField>
+
+<ParamField query="error_description" type="string">
+  Human-readable error description
+</ParamField>
+
+### Example
+
+Initiate authorization flow:
+
+```
+https://api.cultus.app/oauth/authorize?client_id=app_abc123&redirect_uri=https://example.com/callback
+```
+
+### Notes
+
+- Users only need to authorize an app once. Subsequent requests auto-approve if already authorized
+- Apps with `"suspended"` status will be rejected
+- The redirect URI must exactly match the registered URI for the app
+- State parameter validation is handled internally using secure random tokens
+- Users receive an email notification when they authorize a new app

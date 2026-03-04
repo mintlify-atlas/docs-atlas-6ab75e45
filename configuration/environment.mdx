@@ -1,0 +1,311 @@
+---
+title: Environment Variables
+description: Complete reference for all Cultus API environment variables
+---
+
+This page documents all environment variables used by the Cultus API. Configuration is loaded using Viper from a `.env` file at the application root.
+
+## Configuration Loading
+
+The application uses the following configuration loading strategy:
+
+- Environment variables are automatically loaded via `viper.AutomaticEnv()`
+- Values from `.env` file override defaults
+- Hard-coded defaults are applied for missing non-critical values
+- See `pkg/config/config.go` for the complete configuration structure
+
+## Application Settings
+
+<ParamField path="APP_NAME" type="string" default="Cultus">
+  Application name used in branding and emails
+</ParamField>
+
+<ParamField path="APP_ENV" type="string" default="development" required>
+  Application environment. Valid values:
+  - `production` - Production environment
+  - `staging` - Staging environment  
+  - `development` - Development environment
+  
+  This affects logging, API URLs, and error handling behavior.
+</ParamField>
+
+<ParamField path="PORT" type="string" default="9000">
+  Port on which the HTTP server listens
+</ParamField>
+
+<ParamField path="ALLOWED_ORIGINS" type="string" default="*">
+  CORS allowed origins. Use `*` for all origins or comma-separated domains.
+</ParamField>
+
+## Database Configuration
+
+<ParamField path="POSTGRES_DSN" type="string" required>
+  PostgreSQL connection string in DSN format.
+  
+  Example:
+  ```
+  postgres://username:password@localhost:5432/cultus?sslmode=disable
+  ```
+  
+  See [Database Configuration](/configuration/database) for more details.
+</ParamField>
+
+<ParamField path="REDIS_DSN" type="string" required>
+  Redis connection string for caching and session management.
+  
+  Example:
+  ```
+  redis://localhost:6379
+  redis://localhost:6379/0
+  redis://:password@localhost:6379/0
+  ```
+</ParamField>
+
+## Authentication & Security
+
+<ParamField path="JWT_SECRET" type="string" required>
+  Secret key for signing JWT tokens. Must be a strong random string.
+  
+  <Warning>
+    Use a cryptographically secure random string in production. Changing this invalidates all existing tokens.
+  </Warning>
+</ParamField>
+
+<ParamField path="HASH_SECRET" type="string" required>
+  Secret key for hashing sensitive data
+</ParamField>
+
+<ParamField path="GOOGLE_CLIENT_ID" type="string">
+  Google OAuth client ID for social authentication
+</ParamField>
+
+<ParamField path="GOOGLE_CLIENT_SECRET" type="string">
+  Google OAuth client secret
+</ParamField>
+
+<ParamField path="APPLE_CLIENT_ID" type="string">
+  Apple OAuth client ID for Sign in with Apple
+</ParamField>
+
+## Storage Configuration
+
+<ParamField path="AWS_REGION" type="string" required>
+  AWS region for S3 storage (e.g., `us-east-1`)
+</ParamField>
+
+<ParamField path="AWS_ENDPOINT" type="string" required>
+  S3-compatible endpoint URL. Can be AWS S3 or compatible services like Wasabi, DigitalOcean Spaces, MinIO.
+  
+  Example:
+  ```
+  https://s3.wasabisys.com
+  https://s3.amazonaws.com
+  http://localhost:9000  # MinIO
+  ```
+</ParamField>
+
+<ParamField path="AWS_ACCESS_KEY" type="string" required>
+  S3 access key ID
+</ParamField>
+
+<ParamField path="AWS_SECRET_KEY" type="string" required>
+  S3 secret access key
+</ParamField>
+
+<ParamField path="AWS_BUCKET_NAME" type="string" required>
+  S3 bucket name for storing user uploads
+  
+  See [Storage Configuration](/configuration/storage) for bucket structure and file organization.
+</ParamField>
+
+## Queue & Real-time
+
+<ParamField path="NATS_URL" type="string" default="nats-dev://localhost:4223" required>
+  NATS server URL for job queue and async processing.
+  
+  Example:
+  ```
+  nats://localhost:4222
+  nats://user:password@localhost:4222
+  ```
+  
+  See [Queue Configuration](/configuration/queue) for event types and job processing.
+</ParamField>
+
+<ParamField path="CENTRIFUGO_URL" type="string" default="ws://localhost:8000/connection/websocket" required>
+  Centrifugo WebSocket URL for real-time updates.
+  
+  Example:
+  ```
+  ws://localhost:8000/connection/websocket
+  wss://centrifugo.example.com/connection/websocket
+  ```
+  
+  See [Queue Configuration](/configuration/queue) for WebSocket events.
+</ParamField>
+
+<ParamField path="CENTRIFUGO_ADMIN_PWD" type="string">
+  Centrifugo admin password for management API access
+</ParamField>
+
+<ParamField path="CENTRIFUGO_ADMIN_SECRET" type="string">
+  Centrifugo admin secret for authentication
+</ParamField>
+
+## External Services
+
+### Email (Resend)
+
+<ParamField path="RESEND_SECRET" type="string">
+  Resend API key for sending transactional emails
+</ParamField>
+
+<ParamField path="RESEND_ORIGIN" type="string">
+  Origin domain for Resend emails (e.g., `noreply@linkvite.io`)
+</ParamField>
+
+### Payment (Stripe)
+
+<ParamField path="STRIPE_SECRET" type="string">
+  Stripe secret key for payment processing
+</ParamField>
+
+<ParamField path="STRIPE_WEBHOOK_SECRET" type="string">
+  Stripe webhook signing secret for verifying webhook events
+</ParamField>
+
+### Push Notifications (Expo)
+
+<ParamField path="EXPO_ACCESS_TOKEN" type="string">
+  Expo access token for sending push notifications to mobile apps
+</ParamField>
+
+<ParamField path="EXPO_WEBHOOK_SECRET" type="string">
+  Expo webhook secret for verifying delivery receipts
+</ParamField>
+
+### Content APIs
+
+<ParamField path="TENOR_API_KEY" type="string">
+  Tenor API key for GIF search functionality
+</ParamField>
+
+<ParamField path="UNSPLASH_ACCESS_KEY" type="string">
+  Unsplash API key for stock photo search
+</ParamField>
+
+### Monitoring
+
+<ParamField path="SENTRY_DSN" type="string">
+  Sentry DSN for error tracking and monitoring
+  
+  Example:
+  ```
+  https://public@sentry.io/project-id
+  ```
+</ParamField>
+
+## Environment-Specific URLs
+
+The following URLs are automatically configured based on `APP_ENV`:
+
+| Variable | Development | Staging | Production |
+|----------|-------------|---------|------------|
+| `ApiURL` | `https://api.local-linkvite.io` | `https://api-stg.linkvite.io` | `https://api.linkvite.io` |
+| `AppURL` | `https://app.local-linkvite.io` | `https://app.linkvite.io` | `https://app.linkvite.io` |
+| `WebURL` | `https://linkvite.io` | `https://linkvite.io` | `https://linkvite.io` |
+| `AuthURL` | `https://app.local-linkvite.io/auth` | `https://app.linkvite.io/auth` | `https://app.linkvite.io/auth` |
+| `AssetsURL` | `https://assets.linkvite.io` | `https://assets.linkvite.io` | `https://assets.linkvite.io` |
+| `StorageURL` | `https://storage.linkvite.io` | `https://storage.linkvite.io` | `https://storage.linkvite.io` |
+
+## Hard-coded Configuration
+
+The following configuration values are hard-coded in `pkg/config/config.go:108-164`:
+
+### File Size Limits
+
+- **Item Image**: 5 MB (`ItemImageSizeLimit`)
+- **Bookmark Upload**: 100 MB (`BookmarkSizeLimit`)
+- **Import File**: 50 MB (`ImportFileSizeLimit`)
+
+### Storage Quotas
+
+- **Free User**: 200 MB (`FreeUserStorageLimit`)
+- **Pro User**: 1 GB (`ProUserStorageLimit`)
+
+### Batch Operations
+
+- **Max Batch Size**: 100 items (`MaxBatchSize`)
+
+### File Storage Keys
+
+S3 object key patterns:
+
+- Avatars: `avatars/%s`
+- Bookmarks: `bookmarks/%s`
+- Bookmark Covers: `bookmark-covers/%s`
+- Collection Covers: `collection-covers/%s`
+- Custom App Images: `custom-apps/%s`
+- Archives: `archives/%s`
+- Temporary Files: `temp/%s`
+
+## Example .env File
+
+```bash
+# Application
+APP_NAME=Cultus
+APP_ENV=development
+PORT=9000
+ALLOWED_ORIGINS=*
+
+# Database
+POSTGRES_DSN=postgres://cultus:password@localhost:5432/cultus?sslmode=disable
+REDIS_DSN=redis://localhost:6379
+
+# Security
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+HASH_SECRET=your-hash-secret
+
+# Storage (Wasabi/S3)
+AWS_REGION=us-east-1
+AWS_ENDPOINT=https://s3.wasabisys.com
+AWS_ACCESS_KEY=your-access-key
+AWS_SECRET_KEY=your-secret-key
+AWS_BUCKET_NAME=cultus-storage
+
+# Queue & WebSocket
+NATS_URL=nats://localhost:4222
+CENTRIFUGO_URL=ws://localhost:8000/connection/websocket
+CENTRIFUGO_ADMIN_PWD=admin-password
+CENTRIFUGO_ADMIN_SECRET=admin-secret
+
+# Email
+RESEND_SECRET=re_123456789
+RESEND_ORIGIN=noreply@linkvite.io
+
+# Payments
+STRIPE_SECRET=sk_test_123456789
+STRIPE_WEBHOOK_SECRET=whsec_123456789
+
+# Push Notifications
+EXPO_ACCESS_TOKEN=your-expo-token
+EXPO_WEBHOOK_SECRET=your-expo-webhook-secret
+
+# OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+APPLE_CLIENT_ID=your-apple-client-id
+
+# Content APIs
+TENOR_API_KEY=your-tenor-api-key
+UNSPLASH_ACCESS_KEY=your-unsplash-key
+
+# Monitoring
+SENTRY_DSN=https://public@sentry.io/project-id
+```
+
+## Related Documentation
+
+- [Database Configuration](/configuration/database) - PostgreSQL setup and migrations
+- [Storage Configuration](/configuration/storage) - S3 bucket structure and file uploads
+- [Queue Configuration](/configuration/queue) - NATS and WebSocket setup

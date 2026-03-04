@@ -1,0 +1,82 @@
+---
+title: "Delete Comment"
+api: "DELETE /comments/:id"
+description: "Delete a comment from a bookmark"
+---
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The public ID of the comment to delete (format: `cmt_*`)
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message confirming deletion
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl -X DELETE https://api.cultus.app/comments/cmt_xyz789 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "message": "comment deleted"
+}
+```
+
+</ResponseExample>
+
+## Authentication
+
+Requires authentication. Only the comment author or bookmark admins can delete comments.
+
+## Authorization
+
+A comment can be deleted by:
+- The user who created the comment
+- Administrators of the bookmark where the comment was posted
+
+Regular bookmark members cannot delete other users' comments.
+
+## Cascade Behavior
+
+When a comment is deleted:
+- The comment is permanently removed from the database
+- All replies to this comment may be affected (check implementation)
+- All likes associated with this comment are removed
+
+## Error Responses
+
+<ResponseField name="400" type="Bad Request">
+  Invalid comment ID format
+</ResponseField>
+
+<ResponseField name="403" type="Forbidden">
+  User doesn't have permission to delete this comment. This occurs when:
+  - User doesn't have access to the bookmark
+  - User is not the comment author and not a bookmark admin
+</ResponseField>
+
+<ResponseField name="404" type="Not Found">
+  Comment or bookmark not found
+</ResponseField>
+
+## Use Cases
+
+### Delete Own Comment
+Any user can delete their own comments on bookmarks they have access to.
+
+### Moderation
+Bookmark administrators can delete any comment within their bookmark for moderation purposes.
+
+### Content Management
+Deleting inappropriate, spam, or outdated comments to maintain bookmark quality.

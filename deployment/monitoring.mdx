@@ -1,0 +1,664 @@
+---
+title: "Monitoring and Observability"
+description: "Comprehensive monitoring, logging, and error tracking for Cultus API"
+---
+
+## Overview
+
+Cultus API implements a multi-layered observability stack including structured logging, error tracking with Sentry, and comprehensive health checks for all dependencies.
+
+## Health Check Endpoints
+
+### Basic Health Check
+
+**Endpoint:** `GET /health`
+
+```bash
+curl https://api.linkvite.io/health
+```
+
+**Response:**
+```json
+{
+  "message": "Cultus is alive and well",
+  "success": true
+}
+```
+
+**Use case:** Load balancer health checks, uptime monitoring
+
+### Deep Health Check
+
+**Endpoint:** `GET /health/deep`
+
+Performs comprehensive checks of all dependencies:
+
+```bash
+curl https://api.linkvite.io/health/deep
+```
+
+**Response:**
+```json
+{
+  "message": "Deep health check completed",
+  "success": true,
+  "data": {
+    "health": {
+      "status": "healthy",
+      "timestamp": "2026-03-04T10:30:00Z",
+      "components": {
+        "postgres": {
+          "status": "healthy",
+          "message": "PostgreSQL connection",
+          "latency_ms": 5,
+          "latency_str": "5ms"
+        },
+        "redis": {
+          "status": "healthy",
+          "message": "Redis connection",
+          "latency_ms": 2,
+          "latency_str": "2ms"
+        },
+        "queue": {
+          "status": "healthy",
+          "message": "NATS connection",
+          "latency_ms": 3,
+          "latency_str": "3ms"
+        },
+        "socket": {
+          "status": "healthy",
+          "message": "Centrifugo connection",
+          "latency_ms": 4,
+          "latency_str": "4ms"
+        },
+        "s3": {
+          "status": "healthy",
+          "message": "S3 storage connection",
+          "latency_ms": 150,
+          "latency_str": "150ms"
+        }
+      }
+    }
+  }
+}
+```
+
+**HTTP Status Codes:**
+- `200 OK` - All components healthy or degraded but operational
+- `503 Service Unavailable` - One or more critical components unhealthy
+
+### Health Status Types
+
+| Status | Description | Condition |
+|--------|-------------|----------|
+| `healthy` | All systems operational | All components return success |
+| `degraded` | Partial functionality | 50% or more components healthy |
+| `unhealthy` | Service unavailable | Less than 50% components healthy |
+
+### Monitored Components
+
+The deep health check monitors:
+
+1. **PostgreSQL** - Primary database connectivity
+2. **Redis** - Cache layer connectivity
+3. **NATS** - Message queue (currently placeholder)
+4. **Centrifugo** - WebSocket server state
+5. **S3** - Object storage connectivity
+
+### Implementation Details
+
+From `handlers/health.go`:
+
+```go
+func (h *handler) deepCheckHealth(c *fiber.Ctx) error {
+    ctx, cancel := context.WithTimeout(c.Context(), 5*time.Second)
+    defer cancel()
+    
+    // Parallel health checks with goroutines
+    checks := []struct {
+        name string
+        fn   func(context.Context) ComponentHealth
+    }{
+        {"s3", h.checkS3},
+        {"queue", h.checkNATS},
+        {"cache", h.checkRedis},
+        {"postgres", h.checkPostgres},
+        {"socket", h.checkCentrifugo},
+    }
+    
+    // Execute checks concurrently
+    var wg sync.WaitGroup
+    for _, check := range checks {
+        wg.Add(1)
+        go func(name string, checkFn func(context.Context) ComponentHealth) {
+            defer wg.Done()
+            result := checkFn(ctx)
+            health.Components[name] = result
+        }(check.name, check.fn)
+    }
+    wg.Wait()
+    
+    // ... calculate overall health
+}
+```
+
+**Key features:**
+- 5-second timeout for all checks
+- Parallel execution with goroutines
+- Latency measurement for each component
+- Graceful degradation
+
+## Sentry Integration
+
+### Configuration
+
+Sentry is initialized in `main.go`:
+
+```go
+err := sentry.Init(sentry.ClientOptions{
+    Dsn: config.Vars.SentryDSN,
+    BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+        if hint.Context != nil {
+            if c, ok := hint.Context.Value(sentry.RequestContextKey).(*fiber.Ctx); ok {
+                logger.Logger.Info(utils.CopyString(c.Hostname()))
+            }
+        }
+        return event
+    },
+    Debug:            true,
+    AttachStacktrace: true,
+})
+
+defer sentry.Flush(2 * time.Second)
+```
+
+### Environment Variable
+
+```bash
+SENTRY_DSN=https://your-key@sentry.io/project-id
+```
+
+<Tip>
+Set `SENTRY_DSN` to an empty string in development to disable Sentry.
+</Tip>
+
+### Fiber Integration
+
+Sentry middleware captures all HTTP errors:
+
+```go
+// From internal/server/server.go
+s.Use(fibersentry.New(fibersentry.Config{
+    Repanic:         true,
+    WaitForDelivery: true,
+}))
+```
+
+### Error Context
+
+Sentry automatically captures:
+- Request URL and method
+- Request headers
+- User IP address
+- Stack traces
+- Custom context from `BeforeSend`
+
+### Panic Recovery
+
+The application includes panic recovery middleware:
+
+```go
+s.Use(recover.New(recover.Config{
+    EnableStackTrace: true,
+    StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
+        err, ok := e.(error)
+        if !ok {
+            err = fmt.Errorf("%v", e)
+        }
+        logger.Logger.Error("cultus crashed unexpectedly", zap.Error(err))
+    },
+}))
+```
+
+**This ensures:**
+- Application doesn't crash completely
+- Errors are logged to Zap
+- Errors are sent to Sentry
+- Stack traces are preserved
+
+## Logging Setup
+
+### Logger Configuration
+
+Implemented in `internal/logger/logger.go`:
+
+```go
+package logger
+
+import (
+    "cultus/pkg/config"
+    "go.uber.org/zap"
+)
+
+var Logger *zap.Logger
+
+func init() {
+    var err error
+    if config.Vars.IsDev {
+        Logger, err = zap.NewDevelopment()
+    } else {
+        Logger, err = zap.NewProduction()
+    }
+    
+    if err != nil {
+        panic("failed to create logger")
+    }
+}
+```
+
+### Log Formats
+
+**Development:**
+- Human-readable console output
+- Colorized log levels
+- Full stack traces
+- Pretty-printed JSON
+
+**Production:**
+- Structured JSON output
+- Optimized for log aggregation
+- Minimal stack traces
+- Fields: timestamp, level, message, caller, stacktrace
+
+Example production log:
+```json
+{
+  "level": "error",
+  "ts": 1709545800.123456,
+  "caller": "handlers/health.go:114",
+  "msg": "PostgreSQL connection failed",
+  "error": "connection refused",
+  "latency_ms": 5000,
+  "stacktrace": "..."
+}
+```
+
+### Fiber Logging Middleware
+
+Request/response logging via `fiberzap`:
+
+```go
+s.Use(fiberzap.New(fiberzap.Config{
+    Logger: logger.Logger,
+}))
+```
+
+**Logs include:**
+- Request method and path
+- Response status code
+- Request duration
+- Client IP address
+- User agent
+
+### Log Levels
+
+| Level | Usage |
+|-------|-------|
+| `Debug` | Development debugging info |
+| `Info` | General informational messages |
+| `Warn` | Warning conditions (e.g., invalid config defaults) |
+| `Error` | Error conditions requiring attention |
+| `Fatal` | Critical errors causing shutdown |
+
+### Accessing Logs
+
+**Docker:**
+```bash
+# View live logs
+docker logs -f app-prod
+
+# Last 100 lines
+docker logs app-prod --tail 100
+
+# Since specific time
+docker logs app-prod --since 2026-03-04T10:00:00
+
+# Save to file
+docker logs app-prod > app.log 2>&1
+```
+
+**Docker Compose:**
+```bash
+# All services
+docker compose -f deployments/docker-compose.base.yml \
+               -f deployments/docker-compose.prod.yml logs -f
+
+# Specific service
+docker compose logs -f app-prod
+```
+
+## Metrics and Performance Monitoring
+
+### Built-in Metrics
+
+The application includes several performance-focused middleware:
+
+#### Compression
+```go
+s.Use(compress.New(compress.Config{
+    Level: compress.LevelBestSpeed,
+}))
+```
+
+#### ETag
+```go
+s.Use(etag.New())
+```
+
+#### Idempotency
+```go
+s.Use(idempotency.New())
+```
+
+### Custom Metrics
+
+Health check endpoints provide latency metrics:
+
+```bash
+curl https://api.linkvite.io/health/deep | jq '.data.health.components[] | {component: .message, latency: .latency_ms}'
+```
+
+### Application Metrics
+
+Key performance indicators to monitor:
+
+| Metric | Description | Threshold |
+|--------|-------------|----------|
+| **Response Time** | Average API response time | < 200ms (p95) |
+| **Database Latency** | PostgreSQL query time | < 10ms (p95) |
+| **Cache Hit Rate** | Redis cache effectiveness | > 80% |
+| **Queue Depth** | NATS pending messages | < 1000 |
+| **Error Rate** | HTTP 5xx responses | < 1% |
+| **Uptime** | Service availability | > 99.9% |
+
+### Recommended Monitoring Stack
+
+**Option 1: Prometheus + Grafana**
+
+Add Prometheus metrics exporter:
+
+```bash
+go get github.com/ansrivas/fiberprometheus/v2
+```
+
+```go
+import "github.com/ansrivas/fiberprometheus/v2"
+
+prometheus := fiberprometheus.New("cultus")
+prometheus.RegisterAt(app, "/metrics")
+app.Use(prometheus.Middleware)
+```
+
+**Option 2: Datadog**
+
+```bash
+go get github.com/DataDog/dd-trace-go/contrib/gofiber/fiber/v2
+```
+
+**Option 3: New Relic**
+
+```bash
+go get github.com/newrelic/go-agent/v3/integrations/nrfiber
+```
+
+## Error Tracking and Alerting
+
+### Error Types
+
+**Application Errors:**
+- Handled via custom error handler: `response.DefaultErrorHandler`
+- Logged to Zap
+- Sent to Sentry with context
+
+**Panic Errors:**
+- Caught by recovery middleware
+- Full stack trace captured
+- Sent to Sentry
+- Logged with `logger.Logger.Error()`
+
+**Database Errors:**
+- Connection failures detected in health checks
+- Query errors logged with Zap
+- Retryable errors handled gracefully
+
+### Alert Configuration
+
+Recommended alerts to configure:
+
+#### Sentry Alerts
+
+1. **Critical Errors**
+   - Any error with level `fatal` or `critical`
+   - Send to: PagerDuty, Slack
+   - Response time: Immediate
+
+2. **High Error Rate**
+   - More than 10 errors/minute
+   - Send to: Slack
+   - Response time: 5 minutes
+
+3. **New Error Types**
+   - First occurrence of any error
+   - Send to: Slack
+   - Response time: Daily digest
+
+#### Health Check Alerts
+
+Monitor `/health/deep` endpoint:
+
+```bash
+# Example: UptimeRobot, Pingdom, or custom script
+curl -f https://api.linkvite.io/health/deep || alert_team
+```
+
+**Configure alerts for:**
+- Any component shows `unhealthy`
+- Overall status is `degraded` for > 5 minutes
+- Overall status is `unhealthy`
+- Any component latency > 1000ms
+
+#### Infrastructure Alerts
+
+- **CPU usage** > 80% for 5 minutes
+- **Memory usage** > 85%
+- **Disk space** < 10% free
+- **Container restart** (any unplanned restart)
+
+## Performance Monitoring
+
+### Database Query Performance
+
+Monitor slow queries:
+
+```sql
+-- PostgreSQL slow query log
+ALTER DATABASE cultus_production SET log_min_duration_statement = 1000;
+
+-- Find slow queries
+SELECT query, calls, total_time, mean_time
+FROM pg_stat_statements
+ORDER BY mean_time DESC
+LIMIT 10;
+```
+
+### Redis Performance
+
+```bash
+# Monitor Redis commands
+redis-cli --latency
+
+# Check cache hit rate
+redis-cli INFO stats | grep keyspace
+```
+
+### Application Profiling
+
+Enable Go profiling endpoints:
+
+```go
+import _ "net/http/pprof"
+
+go func() {
+    http.ListenAndServe("localhost:6060", nil)
+}()
+```
+
+Access profiles:
+```bash
+# CPU profile
+go tool pprof http://localhost:6060/debug/pprof/profile
+
+# Memory profile
+go tool pprof http://localhost:6060/debug/pprof/heap
+
+# Goroutines
+go tool pprof http://localhost:6060/debug/pprof/goroutine
+```
+
+## Log Aggregation
+
+### Recommended Solutions
+
+**Option 1: ELK Stack (Elasticsearch, Logstash, Kibana)**
+
+```yaml
+# docker-compose.monitoring.yml
+services:
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    environment:
+      - discovery.type=single-node
+    
+  logstash:
+    image: logstash:8.11.0
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    
+  kibana:
+    image: kibana:8.11.0
+    ports:
+      - 5601:5601
+```
+
+**Option 2: Loki + Grafana**
+
+```yaml
+services:
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/log:/var/log
+    
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+```
+
+**Option 3: Cloud Services**
+- Datadog Logs
+- AWS CloudWatch
+- Google Cloud Logging
+- Papertrail
+
+### Docker Logging Driver
+
+```yaml
+services:
+  app-prod:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+## Dashboards
+
+### Key Metrics Dashboard
+
+Create dashboards for:
+
+1. **Overview**
+   - Requests per second
+   - Average response time
+   - Error rate
+   - Active connections
+
+2. **Health Status**
+   - Component health status
+   - Component latencies
+   - Last health check time
+
+3. **Resources**
+   - CPU usage
+   - Memory usage
+   - Disk I/O
+   - Network traffic
+
+4. **Dependencies**
+   - PostgreSQL connections
+   - Redis memory usage
+   - NATS queue depth
+   - S3 request count
+
+## Troubleshooting Guide
+
+### High Error Rate
+
+```bash
+# 1. Check Sentry for error patterns
+# 2. Review recent logs
+docker logs app-prod --since 10m | grep ERROR
+
+# 3. Check health status
+curl https://api.linkvite.io/health/deep | jq '.data.health'
+
+# 4. Check database connections
+docker exec -it app-prod psql $POSTGRES_DSN -c "SELECT count(*) FROM pg_stat_activity;"
+```
+
+### Slow Response Times
+
+```bash
+# 1. Check component latencies
+curl https://api.linkvite.io/health/deep | jq '.data.health.components'
+
+# 2. Check database slow queries
+# 3. Check Redis latency
+# 4. Review application profiling data
+```
+
+### Memory Leaks
+
+```bash
+# 1. Check memory usage
+docker stats app-prod
+
+# 2. Get heap profile
+curl http://localhost:6060/debug/pprof/heap > heap.prof
+go tool pprof heap.prof
+
+# 3. Check for goroutine leaks
+curl http://localhost:6060/debug/pprof/goroutine > goroutine.prof
+```
+
+## Next Steps
+
+- [Docker Deployment Guide](/deployment/docker)
+- [Production Deployment Checklist](/deployment/production)

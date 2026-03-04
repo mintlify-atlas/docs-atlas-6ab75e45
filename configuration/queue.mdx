@@ -1,0 +1,565 @@
+---
+title: Queue & WebSocket Configuration
+description: NATS queue system and Centrifugo WebSocket setup for real-time events in Cultus API
+---
+
+Cultus uses NATS for asynchronous job processing and Centrifugo for real-time WebSocket communication.
+
+## NATS Queue Configuration
+
+### Environment Variables
+
+<ParamField path="NATS_URL" type="string" default="nats-dev://localhost:4223" required>
+  NATS server connection URL
+  
+  Examples:
+  ```bash
+  # Development
+  NATS_URL=nats://localhost:4222
+  
+  # With authentication
+  NATS_URL=nats://user:password@localhost:4222
+  
+  # TLS connection
+  NATS_URL=tls://nats.example.com:4222
+  
+  # Multiple servers
+  NATS_URL=nats://server1:4222,nats://server2:4222
+  ```
+</ParamField>
+
+### NATS JetStream Setup
+
+The queue system uses NATS JetStream for persistence and guaranteed delivery. Initialization in `internal/queue/queue.go:32-52`:
+
+```go
+nc, err := nats.Connect(config.Vars.NatsURL)
+js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
+
+_, err = js.AddStream(&nats.StreamConfig{
+    Name:     "EVENTS",
+    Subjects: []string{"events.>"},
+})
+```
+
+**Stream Configuration:**
+- **Stream Name:** `EVENTS`
+- **Subjects:** `events.>` (all events matching pattern)
+- **Max Pending:** 256 async publish operations
+
+### Consumer Configuration
+
+Queue consumer settings in `internal/queue/queue.go:83-133`:
+
+```go
+maxInflight := 128
+sub, _ := q.Conn.PullSubscribe(
+    "events.>",
+    "wq",  // worker queue consumer group
+    nats.PullMaxWaiting(maxInflight),
+)
+
+msgs, _ := sub.Fetch(100, nats.Context(ctx))  // Batch size: 100
+```
+
+**Configuration:**
+- **Max In-Flight:** 128 messages
+- **Batch Size:** 100 messages per fetch
+- **Consumer Group:** `wq` (worker queue)
+- **Processing:** Concurrent goroutines with WaitGroup
+
+## Event Types
+
+All event types are defined in `types/queue.go:5-59`:
+
+### User Events
+
+```go
+EventTypeUserUpdated     = "events.user.updated"
+EventTypeTrashEmptied    = "events.trash.emptied"
+EventTypeSettingsUpdated = "events.settings.updated"
+EventTypePasswordChanged = "events.password.changed"
+EventTypeUserExport      = "events.user.export"
+```
+
+### Bookmark Events
+
+```go
+EventTypeBookmarkStarred   = "events.bookmark.starred"
+EventTypeBookmarkCreated   = "events.bookmark.created"
+EventTypeBookmarkUpdated   = "events.bookmark.updated"
+EventTypeBookmarkDeleted   = "events.bookmark.deleted"
+EventTypeBookmarkArchived  = "events.bookmark.archived"
+EventTypeNewBookmarkLink   = "events.new.bookmark.link"        // Queue job
+EventTypeFileBookmarkUploaded = "events.bookmark.file_uploaded" // Queue job
+```
+
+### Collection Events
+
+```go
+EventTypeCollectionLeft    = "events.collection.left"
+EventTypeCollectionCreated = "events.collection.created"
+EventTypeCollectionUpdated = "events.collection.updated"
+EventTypeCollectionDeleted = "events.collection.deleted"
+```
+
+### Notification Events
+
+```go
+EventTypeNotificationCreated = "events.notification.created"
+EventTypeNotificationUpdated = "events.notification.updated"
+EventTypeNotificationAllSeen = "events.notification.all_seen"
+EventTypeNotificationDeleted = "events.notification.deleted"
+```
+
+### Reminder Events
+
+```go
+EventTypeReminderCreated = "events.reminder.created"
+EventTypeReminderUpdated = "events.reminder.updated"
+EventTypeReminderDeleted = "events.reminder.deleted"
+EventTypeReminderCleared = "events.reminder.cleared"
+EventTypeReminderFired   = "events.reminder.fired"
+```
+
+### RSS Feed Events
+
+```go
+EventTypeNewRSSFeed         = "events.rss_feed.new"           // Queue job
+EventTypeUpdateRSSFeed      = "events.rss_feed.update"        // Queue job
+EventTypeUpdatedRSSFeed     = "events.rss_feed.updated"       // WebSocket
+EventTypeRSSFeedDeleted     = "events.rss_feed.deleted"       // WebSocket
+EventTypeRSSFeedBatchDelete = "events.rss_feed.batch_delete"  // Queue job
+```
+
+### Other Events
+
+```go
+EventTypeHighlightCreated   = "events.highlight.created"
+EventTypeHighlightUpdated   = "events.highlight.updated"
+EventTypeHighlightDeleted   = "events.highlight.deleted"
+
+EventTypeInvitesDeclined    = "events.invites.declined"
+EventTypeInvitesDeclinedAll = "events.invites.declined_all"
+
+EventTypeAPIKeyCreated = "events.api_key.created"
+EventTypeAPIKeyUpdated = "events.api_key.updated"
+EventTypeAPIKeyDeleted = "events.api_key.deleted"
+
+EventTypeParserImport = "events.parser.import"     // Queue job
+EventTypeImportTabs   = "events.import.tabs"       // Queue job
+```
+
+## Queue Job Handlers
+
+Queue jobs are processed by handlers in `internal/queue/handler.go:10-33`:
+
+```go
+func (q *Queue) process(pl *types.Payload, msg *nats.Msg) error {
+    switch pl.Event {
+    case types.EventTypeParserImport:
+        return q.handleParserImport(pl, msg)
+    case types.EventTypeNewBookmarkLink:
+        return q.handleNewBookmarkLink(pl, msg)
+    case types.EventTypeImportTabs:
+        return q.handleImportTabs(pl, msg)
+    case types.EventTypeFileBookmarkUploaded:
+        return q.handleFileBookmarkUploaded(pl, msg)
+    case types.EventTypeNewRSSFeed:
+        return q.handleNewRSSFeed(pl, msg)
+    case types.EventTypeUpdateRSSFeed:
+        return q.handleUpdateRSSFeed(pl, msg)
+    case types.EventTypeRSSFeedBatchDelete:
+        return q.handleRSSFeedBatchDelete(pl, msg)
+    case types.EventTypeUserExport:
+        return q.handleExportUserData(pl, msg)
+    default:
+        logger.Logger.Info("published message: " + string(pl.Event))
+    }
+    return nil
+}
+```
+
+### Job Handler Implementations
+
+| Event | Handler | File | Description |
+|-------|---------|------|-------------|
+| `EventTypeNewBookmarkLink` | `handleNewBookmarkLink()` | `internal/queue/bookmark.go:58` | Process new URL bookmark, fetch metadata, generate preview |
+| `EventTypeFileBookmarkUploaded` | `handleFileBookmarkUploaded()` | `internal/queue/bookmark.go:227` | Process uploaded file bookmark, extract metadata |
+| `EventTypeImportTabs` | `handleImportTabs()` | `internal/queue/bookmark.go:107` | Batch import browser tabs |
+| `EventTypeParserImport` | `handleParserImport()` | `internal/queue/import.go:19` | Parse and import bookmarks from various formats |
+| `EventTypeNewRSSFeed` | `handleNewRSSFeed()` | `internal/queue/rss.go:14` | Subscribe to new RSS feed, fetch initial items |
+| `EventTypeUpdateRSSFeed` | `handleUpdateRSSFeed()` | `internal/queue/rss.go:76` | Update RSS feed with new items |
+| `EventTypeRSSFeedBatchDelete` | `handleRSSFeedBatchDelete()` | `internal/queue/rss.go:205` | Delete multiple RSS feed items |
+| `EventTypeUserExport` | `handleExportUserData()` | `internal/queue/user.go:21` | Export user data to archive |
+
+## Publishing Events
+
+To publish an event to the queue:
+
+```go
+err := queue.Publish(types.Payload{
+    Event:    types.EventTypeNewBookmarkLink,
+    Channels: []string{fmt.Sprintf("user:%s", userID)},
+    Data: map[string]interface{}{
+        "url":           bookmarkURL,
+        "collection_id": collectionID,
+    },
+})
+```
+
+**Payload Structure:**
+```go
+type Payload struct {
+    Channels []string    `json:"channels"`  // WebSocket channels to notify
+    Event    EventType   `json:"event"`     // Event type constant
+    Data     interface{} `json:"data"`      // Event-specific data
+    Client   string      `json:"client"`    // Client identifier
+}
+```
+
+## Scheduled Workers
+
+Background workers run on cron schedules (`worker/workers.go:10-33`):
+
+```go
+s := gocron.NewScheduler(time.UTC)
+
+// Process due reminders every minute
+s.Every(1).Minute().Do(w.findAndProcessDueReminders)
+
+// Delete soft-deleted collections weekly
+s.Every(1).Week().Do(w.findAndDeleteCollections)
+
+// Delete soft-deleted users weekly
+s.Every(1).Week().Do(w.findAndDeleteUsers)
+
+// Send waitlist invites every Wednesday
+s.Every(1).Wednesday().Do(w.sendWaitListInvites)
+
+// Process pending bookmarks every minute
+s.Every(1).Minute().Do(w.findAndProcessBookmarks)
+
+// Auto-update RSS feeds every 6 hours
+s.Every(6).Hours().Do(w.findAndAutoUpdateRSSFeeds)
+
+s.StartAsync()
+```
+
+### Worker Implementations
+
+| Worker | Schedule | File | Description |
+|--------|----------|------|-------------|
+| `findAndProcessDueReminders()` | Every 1 minute | `worker/reminders.go` | Send notifications for due reminders |
+| `findAndDeleteCollections()` | Every 1 week | `worker/collections.go` | Permanently delete soft-deleted collections |
+| `findAndDeleteUsers()` | Every 1 week | `worker/users.go` | Permanently delete soft-deleted users |
+| `sendWaitListInvites()` | Every Wednesday | `worker/wait_list.go` | Send beta invites to waitlist |
+| `findAndProcessBookmarks()` | Every 1 minute | `worker/bookmarks.go` | Process pending bookmark operations |
+| `findAndAutoUpdateRSSFeeds()` | Every 6 hours | `worker/rss.go` | Fetch new RSS feed items |
+
+## Centrifugo WebSocket
+
+### Environment Variables
+
+<ParamField path="CENTRIFUGO_URL" type="string" default="ws://localhost:8000/connection/websocket" required>
+  Centrifugo WebSocket connection URL
+  
+  Examples:
+  ```bash
+  # Development
+  CENTRIFUGO_URL=ws://localhost:8000/connection/websocket
+  
+  # Production (secure)
+  CENTRIFUGO_URL=wss://centrifugo.example.com/connection/websocket
+  ```
+</ParamField>
+
+<ParamField path="CENTRIFUGO_ADMIN_PWD" type="string">
+  Centrifugo admin panel password
+</ParamField>
+
+<ParamField path="CENTRIFUGO_ADMIN_SECRET" type="string">
+  Centrifugo admin API secret
+</ParamField>
+
+### Client Initialization
+
+WebSocket client setup in `internal/socket/socket.go:20-33`:
+
+```go
+client := centrifuge.NewJsonClient(
+    config.Vars.CentrifugoURL,
+    centrifuge.Config{},
+)
+
+if err := client.Connect(); err != nil {
+    log.Fatalf("failed to connect to Centrifugo: %v", err)
+}
+```
+
+### Publishing to WebSocket
+
+Publish real-time events to connected clients:
+
+```go
+err := notifier.SendSocketEvent(types.Payload{
+    Event:    types.EventTypeBookmarkCreated,
+    Channels: []string{"user:123", "collection:abc"},
+    Data: bookmarkData,
+})
+```
+
+Implementation in `internal/socket/socket.go:35-70`:
+
+```go
+func (s *Socket) Publish(msg types.Payload) error {
+    data, err := helpers.JSONMarshal(msg)
+    if err != nil {
+        return err
+    }
+
+    // Publish to all specified channels concurrently
+    var wg sync.WaitGroup
+    sem := make(chan bool, 1000)  // Limit concurrent publishes
+
+    for _, channel := range msg.Channels {
+        wg.Add(1)
+        sem <- true
+
+        go func(channel string) {
+            defer wg.Done()
+            defer func() { <-sem }()
+
+            ctx := context.Background()
+            _, err = s.Client.Publish(ctx, channel, data)
+
+            if err != nil {
+                logger.Logger.Warn("failed to publish to channel: " + channel)
+            }
+        }(channel)
+    }
+
+    wg.Wait()
+    return nil
+}
+```
+
+### WebSocket Channels
+
+Channels follow naming patterns:
+
+```go
+// User-specific channel
+channel := fmt.Sprintf("user:%s", userPublicID)
+
+// Collection-specific channel
+channel := fmt.Sprintf("collection:%s", collectionPublicID)
+
+// Bookmark-specific channel
+channel := fmt.Sprintf("bookmark:%s", bookmarkPublicID)
+```
+
+### Presence Stats
+
+Check who's online in a channel:
+
+```go
+stats, err := socket.GetPresenceStats("collection:abc")
+fmt.Printf("Users online: %d\n", stats.NumClients)
+```
+
+## Event Flow
+
+### Example: Create Bookmark from URL
+
+<Steps>
+  <Step title="API Request">
+    Client sends POST request to create bookmark
+  </Step>
+  
+  <Step title="Publish to Queue">
+    ```go
+    queue.Publish(types.Payload{
+        Event: types.EventTypeNewBookmarkLink,
+        Data: map[string]interface{}{
+            "url": "https://example.com",
+            "user_id": userID,
+        },
+    })
+    ```
+  </Step>
+  
+  <Step title="Queue Processing">
+    Worker picks up job from NATS:
+    - Fetch URL content
+    - Extract metadata (title, description, favicon)
+    - Generate preview/thumbnail
+    - Save to database
+  </Step>
+  
+  <Step title="WebSocket Notification">
+    ```go
+    notifier.SendSocketEvent(types.Payload{
+        Event: types.EventTypeBookmarkCreated,
+        Channels: []string{"user:123", "collection:abc"},
+        Data: bookmark,
+    })
+    ```
+  </Step>
+  
+  <Step title="Client Update">
+    Connected clients receive real-time update and show new bookmark
+  </Step>
+</Steps>
+
+### Example: RSS Feed Auto-Update
+
+<Steps>
+  <Step title="Cron Trigger">
+    Worker runs every 6 hours: `findAndAutoUpdateRSSFeeds()`
+  </Step>
+  
+  <Step title="Fetch Feeds">
+    Query database for active RSS feeds
+  </Step>
+  
+  <Step title="Process Each Feed">
+    For each feed, publish queue job:
+    ```go
+    queue.Publish(types.Payload{
+        Event: types.EventTypeUpdateRSSFeed,
+        Data: map[string]interface{}{
+            "feed_id": feedID,
+        },
+    })
+    ```
+  </Step>
+  
+  <Step title="Fetch New Items">
+    Queue handler fetches RSS feed and creates new bookmarks
+  </Step>
+  
+  <Step title="Notify Subscribers">
+    ```go
+    notifier.SendSocketEvent(types.Payload{
+        Event: types.EventTypeBookmarkCreated,
+        Channels: subscriberChannels,
+        Data: newBookmark,
+    })
+    ```
+  </Step>
+</Steps>
+
+## Error Handling & Retries
+
+### Queue Message Acknowledgment
+
+```go
+err = q.process(pl, msg)
+if err != nil {
+    logger.Logger.Warn("couldn't process message", zap.Error(err))
+    return  // Message not acknowledged, will be redelivered
+}
+
+err = msg.Ack()  // Acknowledge successful processing
+if err != nil {
+    logger.Logger.Warn("couldn't ack message", zap.Error(err))
+}
+```
+
+### Job Failure Handling
+
+Defined in `internal/queue/bookmark.go:53-56`:
+
+```go
+func onError(msg *nats.Msg, m string) {
+    logger.Logger.Error(m)
+    msg.Nak()  // Negative acknowledgment, requeue message
+}
+```
+
+<Warning>
+  Failed jobs are automatically requeued by NATS. Implement idempotency to handle duplicate processing.
+</Warning>
+
+## Health Checks
+
+Queue and WebSocket health are monitored at `GET /api/health`:
+
+```go
+// NATS health check
+func (h *handler) checkNATS(ctx context.Context) ComponentHealth {
+    // TODO: Implement actual health check
+    return ComponentHealth{
+        Status:     "healthy",
+        Message:    "NATS connection",
+        ResponseMs: 0,
+    }
+}
+
+// Centrifugo health check  
+func (h *handler) checkCentrifugo(ctx context.Context) ComponentHealth {
+    // TODO: Implement actual health check
+    return ComponentHealth{
+        Status:     "healthy",
+        Message:    "Centrifugo connection",
+        ResponseMs: 0,
+    }
+}
+```
+
+## Performance Tuning
+
+### NATS Configuration
+
+```bash
+# Increase max payload size (default 1MB)
+nats-server --max_payload 10485760  # 10MB
+
+# Enable JetStream with file storage
+nats-server --jetstream --store_dir /data/nats
+
+# Set memory limits
+nats-server --jetstream --max_mem_store 1GB --max_file_store 10GB
+```
+
+### Centrifugo Configuration
+
+```json
+{
+  "v3_use_offset": true,
+  "client_presence_ping_interval": 30,
+  "client_expired_close_delay": 25,
+  "websocket_compression": true,
+  "allowed_origins": ["https://app.linkvite.io"]
+}
+```
+
+## Troubleshooting
+
+### NATS Connection Issues
+
+1. Verify NATS server is running: `nats-server --version`
+2. Test connection: `nats sub test`
+3. Check firewall rules for port 4222
+4. Enable NATS logging: `nats-server -DV`
+
+### WebSocket Connection Issues
+
+1. Check Centrifugo is running: `curl http://localhost:8000/health`
+2. Verify WebSocket URL is accessible from client
+3. Check CORS configuration in Centrifugo
+4. Test with Centrifugo admin panel
+
+### Message Processing Delays
+
+1. Increase `maxInflight` consumer setting
+2. Scale up worker instances
+3. Monitor queue depth: `nats stream info EVENTS`
+4. Check database connection pool limits
+
+## Related Documentation
+
+- [Environment Variables](/configuration/environment) - Queue configuration settings
+- [Database Configuration](/configuration/database) - Job data persistence
+- [Storage Configuration](/configuration/storage) - File processing jobs

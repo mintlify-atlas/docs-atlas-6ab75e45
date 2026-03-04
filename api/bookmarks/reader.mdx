@@ -1,0 +1,293 @@
+---
+title: 'Reader Mode'
+api: 'GET /bookmarks/:id/reader'
+---
+
+Get a clean, readable version of bookmark content optimized for reading.
+
+## Get Reader Content
+
+`GET /bookmarks/:id/reader`
+
+Retrieve a simplified, reader-friendly version of a bookmark's content with ads, navigation, and clutter removed.
+
+<ParamField path="id" type="string" required>
+  Bookmark ID (prefixed with `bm_`)
+</ParamField>
+
+<ResponseExample>
+```json
+{
+  "data": {
+    "url": "https://example.com/article",
+    "title": "How to Build Great APIs",
+    "byline": "By John Doe",
+    "content": "<article><p>Clean HTML content with main article text...</p></article>",
+    "text_content": "Plain text version of the article content for search and analysis..."
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## Response Fields
+
+<ResponseField name="url" type="string">
+  Original URL of the bookmark
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  Article title extracted from the page
+</ResponseField>
+
+<ResponseField name="byline" type="string">
+  Author and publication info (e.g., "By Jane Smith, TechBlog")
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  Clean HTML content containing the main article text. Includes:
+  - Paragraphs and headings
+  - Images with captions
+  - Block quotes
+  - Lists and formatting
+  - Code blocks (if present)
+  
+  Excludes:
+  - Navigation menus
+  - Ads and promotional content
+  - Sidebars
+  - Comments
+  - Related articles
+</ResponseField>
+
+<ResponseField name="text_content" type="string">
+  Plain text version of the content without HTML tags. Useful for:
+  - Full-text search
+  - Text analysis
+  - Word counting
+  - Content excerpts
+</ResponseField>
+
+---
+
+## How Reader Mode Works
+
+1. **Fetch**: System downloads the webpage content
+2. **Validate**: Checks if the page is suitable for reader mode
+3. **Parse**: Extracts the main content using readability algorithms
+4. **Clean**: Removes ads, navigation, and non-essential elements
+5. **Cache**: Stores the result for fast subsequent access
+6. **Return**: Sends clean HTML and text content
+
+### Content Extraction
+
+Reader mode uses Mozilla's Readability library to intelligently identify and extract the main content from web pages. It works by:
+
+- Analyzing page structure and semantics
+- Identifying content density patterns
+- Removing boilerplate and navigation
+- Preserving important formatting
+- Extracting author/publication metadata
+
+---
+
+## Caching
+
+<Info>
+  Reader content is cached indefinitely after first generation. The cache is cleared when the bookmark is deleted.
+</Info>
+
+**Performance**:
+- First request: 2-5 seconds (fetches and processes)
+- Subsequent requests: less than 100ms (served from cache)
+
+---
+
+## Limitations
+
+<Warning>
+  Reader mode does NOT work for:
+  - File bookmarks (PDFs, images, etc.)
+  - Dynamic single-page applications
+  - Paywalled content
+  - Pages with minimal text content
+  - Highly interactive web apps
+</Warning>
+
+Reader mode works best for:
+- Blog posts and articles
+- News articles
+- Documentation pages
+- Long-form content
+- Tutorial and how-to guides
+
+### Validation
+
+Before attempting to extract content, the system validates that:
+1. The bookmark is not a file (size = 0)
+2. The URL is accessible
+3. The page contains sufficient readable content
+4. The page structure is compatible with readability extraction
+
+If validation fails, you'll receive a 500 error.
+
+---
+
+## Use Cases
+
+**Focused reading**: Remove distractions for better comprehension
+
+**Content extraction**: Get clean content for analysis or processing
+
+**Accessibility**: Simplified content works better with screen readers
+
+**Mobile reading**: Lighter content loads faster on mobile
+
+**Content archiving**: Store just the essential content
+
+**Search indexing**: Use text_content for full-text search
+
+---
+
+## Permissions
+
+You can access reader mode for any bookmark you can view:
+- Bookmarks you own
+- Bookmarks in collections you're a member of
+- Public collection bookmarks
+
+---
+
+## Error Responses
+
+<ResponseField name="400" type="error">
+  Files aren't reader-mode supported (only web URLs)
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  No permission to view this bookmark
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Bookmark not found
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  Failed to get reader content (page not readable, network error, or validation failed)
+</ResponseField>
+
+---
+
+## Examples
+
+<CodeGroup>
+```bash cURL
+curl -X GET \
+  https://api.cultus.app/v1/bookmarks/bm_abc123/reader \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.cultus.app/v1/bookmarks/bm_abc123/reader',
+  {
+    headers: { 'Authorization': 'Bearer YOUR_TOKEN' }
+  }
+);
+
+const reader = await response.json();
+
+// Display in your UI
+document.getElementById('reader-title').textContent = reader.data.title;
+document.getElementById('reader-byline').textContent = reader.data.byline;
+document.getElementById('reader-content').innerHTML = reader.data.content;
+
+// Or use text content for search
+const searchable = reader.data.text_content;
+if (searchable.includes('API')) {
+  console.log('Article discusses APIs');
+}
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.cultus.app/v1/bookmarks/bm_abc123/reader',
+    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+
+reader = response.json()['data']
+
+print(f"Title: {reader['title']}")
+print(f"By: {reader['byline']}")
+print(f"\nContent:\n{reader['text_content'][:500]}...")  # First 500 chars
+
+# Save as HTML file
+with open('article.html', 'w', encoding='utf-8') as f:
+    f.write(f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>{reader['title']}</title>
+        <style>
+            body {{ max-width: 800px; margin: 40px auto; font-family: serif; }}
+            h1 {{ font-size: 2em; margin-bottom: 0.5em; }}
+            .byline {{ color: #666; margin-bottom: 2em; }}
+        </style>
+    </head>
+    <body>
+        <h1>{reader['title']}</h1>
+        <div class="byline">{reader['byline']}</div>
+        {reader['content']}
+    </body>
+    </html>
+    """)
+```
+
+```swift Swift
+struct ReaderResponse: Codable {
+    let data: ReaderContent
+}
+
+struct ReaderContent: Codable {
+    let url: String
+    let title: String
+    let byline: String
+    let content: String
+    let textContent: String
+    
+    enum CodingKeys: String, CodingKey {
+        case url, title, byline, content
+        case textContent = "text_content"
+    }
+}
+
+func fetchReaderMode(bookmarkId: String) async throws -> ReaderContent {
+    let url = URL(string: "https://api.cultus.app/v1/bookmarks/\(bookmarkId)/reader")!
+    var request = URLRequest(url: url)
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    
+    let (data, _) = try await URLSession.shared.data(for: request)
+    let response = try JSONDecoder().decode(ReaderResponse.self, from: data)
+    return response.data
+}
+```
+</CodeGroup>
+
+---
+
+## Best Practices
+
+1. **Check compatibility**: Not all pages work well with reader mode. Handle errors gracefully.
+
+2. **Cache on client**: Reader content is stable, cache it in your app for offline access.
+
+3. **Fallback to original**: If reader mode fails, fall back to displaying the original URL.
+
+4. **Preserve formatting**: The HTML content includes semantic tags - preserve them in your rendering.
+
+5. **Credit authors**: Always display the byline to credit content creators.
+
+6. **Respect copyright**: Reader mode is for personal reading, not content redistribution.

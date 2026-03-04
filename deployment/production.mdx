@@ -1,0 +1,558 @@
+---
+title: "Production Deployment"
+description: "Comprehensive checklist and guide for deploying Cultus API to production"
+---
+
+## Pre-Deployment Checklist
+
+### Environment Configuration
+
+<Warning>
+Never commit `.env.prod` or any production secrets to version control.
+</Warning>
+
+#### Required Environment Variables
+
+Based on the configuration schema, ensure all required variables are set:
+
+```bash
+# Application
+APP_NAME=Cultus
+APP_ENV=production  # Must be 'production', 'staging', or 'development'
+PORT=9001
+ALLOWED_ORIGINS=https://app.linkvite.io,https://linkvite.io
+
+# Database
+POSTGRES_DSN=postgresql://user:password@host:5432/cultus?sslmode=require
+
+# Cache & Queue
+REDIS_DSN=redis://redis:6379
+NATS_URL=nats://nats:4222
+
+# WebSocket
+CENTRIFUGO_URL=ws://centrifugo:8000/connection/websocket
+CENTRIFUGO_ADMIN_SECRET=<strong-secret>
+CENTRIFUGO_ADMIN_PWD=<strong-password>
+
+# Security
+HASH_SECRET=<strong-random-string>
+JWT_SECRET=<strong-random-string>
+
+# Error Tracking
+SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
+
+# Storage (S3-compatible)
+AWS_REGION=us-east-1
+AWS_ENDPOINT=https://s3.amazonaws.com
+AWS_ACCESS_KEY=<your-access-key>
+AWS_SECRET_KEY=<your-secret-key>
+AWS_BUCKET_NAME=cultus-production
+
+# Email
+RESEND_SECRET=<resend-api-key>
+RESEND_ORIGIN=noreply@linkvite.io
+
+# Payment Processing
+STRIPE_SECRET=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Push Notifications
+EXPO_ACCESS_TOKEN=<expo-token>
+EXPO_WEBHOOK_SECRET=<webhook-secret>
+
+# Third-party APIs
+TENOR_API_KEY=<tenor-api-key>
+UNSPLASH_ACCESS_KEY=<unsplash-access-key>
+
+# OAuth
+GOOGLE_CLIENT_ID=<google-client-id>
+GOOGLE_CLIENT_SECRET=<google-client-secret>
+APPLE_CLIENT_ID=<apple-client-id>
+APPLE_CLIENT_SECRET=<apple-client-secret>
+```
+
+### Environment-Specific Settings
+
+The application automatically configures URLs based on `APP_ENV`:
+
+| Environment | APP_ENV | API URL | App URL |
+|-------------|---------|---------|----------|
+| Production | `production` | https://api.linkvite.io | https://app.linkvite.io |
+| Staging | `staging` | https://api-stg.linkvite.io | https://app.linkvite.io |
+| Development | `development` | https://api.local-linkvite.io | https://app.local-linkvite.io |
+
+### Secrets Management
+
+<Tip>
+The project supports Infisical for secrets management. See `.infisical.json` for configuration.
+</Tip>
+
+#### Generate Strong Secrets
+
+```bash
+# Generate JWT secret (64 characters)
+openssl rand -base64 64
+
+# Generate hash secret
+openssl rand -hex 32
+
+# Generate webhook secrets
+openssl rand -base64 32
+```
+
+### Database Setup
+
+#### 1. Create Production Database
+
+```sql
+CREATE DATABASE cultus_production;
+CREATE USER cultus_user WITH ENCRYPTED PASSWORD 'strong_password';
+GRANT ALL PRIVILEGES ON DATABASE cultus_production TO cultus_user;
+```
+
+#### 2. Run Migrations
+
+Migrations are located in `sql/` directory (numbered 0001-0018):
+
+```bash
+# Run migrations in order
+for file in sql/*.sql; do
+  psql $POSTGRES_DSN < "$file"
+done
+```
+
+**Migration files include:**
+- `0001_users.sql` - User accounts and authentication
+- `0002_api_keys.sql` - API key management
+- `0003_collections.sql` - Bookmark collections
+- `0004_bookmarks.sql` - Bookmark storage
+- `0005_comments.sql` - Comment system
+- `0006_highlights.sql` - Text highlights
+- `0007_invite_links.sql` - Invite system
+- `0008_invites.sql` - Invite records
+- `0009_bookmark_stars.sql` - Starring functionality
+- `0010_members.sql` - Team members
+- `0011_notifications.sql` - Notification system
+- `0012_reminders.sql` - Reminder functionality
+- `0013_wait_lists.sql` - Waitlist management
+- `0014_external_accounts.sql` - OAuth accounts
+- `0015_comment_likes.sql` - Comment reactions
+- `0016_custom_apps.sql` - Custom integrations
+- `0017_oauth_session.sql` - OAuth sessions
+- `0018_rss_feeds.sql` - RSS feed support
+
+#### 3. Configure SSL/TLS for Database
+
+Ensure your PostgreSQL connection uses SSL:
+
+```bash
+POSTGRES_DSN=postgresql://user:pass@host:5432/db?sslmode=require
+```
+
+## Security Hardening
+
+### 1. HTTPS Enforcement
+
+The application automatically enforces HTTPS in production:
+
+```go
+// From internal/server/server.go
+if !isDev && c.Protocol() != "https" {
+    return response.New(c).Error(response.Data{
+        Message: "please use HTTPS",
+        Status:  fiber.StatusBadRequest,
+    })
+}
+```
+
+### 2. Reverse Proxy Configuration
+
+Set up a reverse proxy (Nginx, Caddy, or Traefik):
+
+#### Example Caddy Configuration
+
+```caddy
+api.linkvite.io {
+    reverse_proxy app-prod:9001
+    
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+    
+    # Rate limiting
+    rate_limit {
+        zone api_limit
+        events 100
+        window 1m
+    }
+    
+    # Logging
+    log {
+        output file /var/log/caddy/api.log
+        format json
+    }
+}
+```
+
+#### Example Nginx Configuration
+
+```nginx
+upstream cultus_api {
+    server app-prod:9001;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.linkvite.io;
+    
+    ssl_certificate /etc/ssl/certs/linkvite.crt;
+    ssl_certificate_key /etc/ssl/private/linkvite.key;
+    
+    # SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    
+    # Proxy settings
+    location / {
+        proxy_pass http://cultus_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+    
+    # WebSocket support for Centrifugo
+    location /connection/websocket {
+        proxy_pass http://centrifugo:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+### 3. CORS Configuration
+
+Set `ALLOWED_ORIGINS` to specific domains:
+
+```bash
+# Never use * in production
+ALLOWED_ORIGINS=https://app.linkvite.io,https://linkvite.io
+```
+
+### 4. File Upload Limits
+
+Configured limits in `pkg/config/config.go`:
+
+- **Item images**: 5 MB
+- **Bookmarks**: 100 MB
+- **Import files**: 50 MB
+- **Body limit**: 200 MB (configurable in server.go)
+
+### 5. Rate Limiting
+
+Implement rate limiting at the reverse proxy level (see examples above).
+
+## Database Backup Strategy
+
+### Automated Backups
+
+```bash
+#!/bin/bash
+# backup-postgres.sh
+
+BACKUP_DIR="/backups/postgres"
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_FILE="$BACKUP_DIR/cultus_$DATE.sql.gz"
+
+# Create backup
+pg_dump $POSTGRES_DSN | gzip > $BACKUP_FILE
+
+# Encrypt backup
+gpg --encrypt --recipient ops@linkvite.io $BACKUP_FILE
+
+# Upload to S3
+aws s3 cp "${BACKUP_FILE}.gpg" s3://cultus-backups/postgres/
+
+# Cleanup old backups (keep 30 days)
+find $BACKUP_DIR -name "*.sql.gz.gpg" -mtime +30 -delete
+```
+
+### Backup Verification
+
+```bash
+# Test restore to verify backup integrity
+pg_restore -d cultus_test < backup.sql
+```
+
+### Point-in-Time Recovery (PITR)
+
+Enable WAL archiving for PostgreSQL:
+
+```ini
+# postgresql.conf
+wal_level = replica
+archive_mode = on
+archive_command = 'aws s3 cp %p s3://cultus-wal-archives/%f'
+```
+
+## Scaling Considerations
+
+### Horizontal Scaling
+
+The application supports horizontal scaling with these considerations:
+
+#### Load Balancer Configuration
+
+```yaml
+# docker-compose for multiple instances
+services:
+  app-prod-1:
+    container_name: app-prod-1
+    # ... same config ...
+    
+  app-prod-2:
+    container_name: app-prod-2
+    # ... same config ...
+    
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "443:443"
+    depends_on:
+      - app-prod-1
+      - app-prod-2
+```
+
+#### Session Management
+
+- JWTs are stateless (signed with `JWT_SECRET`)
+- No server-side session storage required
+- Redis can be used for rate limiting across instances
+
+### Vertical Scaling
+
+#### Resource Limits
+
+Set resource limits in docker-compose:
+
+```yaml
+services:
+  app-prod:
+    # ... other config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+```
+
+#### Database Connection Pool
+
+Adjust PostgreSQL connection pool based on traffic:
+
+```go
+// Typical production values
+MaxOpenConns: 25
+MaxIdleConns: 10
+ConnMaxLifetime: 5 * time.Minute
+```
+
+### Background Workers
+
+The application runs background workers for queue processing:
+
+```go
+// From main.go
+w := worker.New()
+w.SetServices(srv)
+w.SetNotifier(notify).SetQueue(q)
+w.SetStorage(storage).Start()
+
+go func() {
+    w.Consume()
+}()
+```
+
+**Scaling workers:**
+- Run separate worker containers
+- Share NATS queue across workers
+- Use `NATS_URL` environment variable
+
+## SSL/TLS Configuration
+
+### Let's Encrypt with Caddy
+
+Caddy automatically handles SSL certificates:
+
+```caddy
+api.linkvite.io {
+    reverse_proxy app-prod:9001
+    # Certificate is automatic!
+}
+```
+
+### Manual Certificate Management
+
+```bash
+# Generate with certbot
+certbot certonly --standalone -d api.linkvite.io
+
+# Certificates location
+/etc/letsencrypt/live/api.linkvite.io/fullchain.pem
+/etc/letsencrypt/live/api.linkvite.io/privkey.pem
+```
+
+## Deployment Process
+
+### Zero-Downtime Deployment
+
+```bash
+#!/bin/bash
+# deploy.sh
+
+set -e
+
+# Build new image
+docker compose -f deployments/docker-compose.base.yml \
+               -f deployments/docker-compose.prod.yml \
+               build app-prod
+
+# Health check before deployment
+curl -f https://api.linkvite.io/health || exit 1
+
+# Rolling update
+docker compose -f deployments/docker-compose.base.yml \
+               -f deployments/docker-compose.prod.yml \
+               up -d --no-deps app-prod
+
+# Wait for new container to be healthy
+sleep 10
+curl -f https://api.linkvite.io/health/deep || exit 1
+
+echo "Deployment successful!"
+```
+
+### Rollback Procedure
+
+```bash
+# Tag images before deployment
+docker tag cultus:latest cultus:previous
+
+# Rollback if needed
+docker tag cultus:previous cultus:latest
+docker compose up -d app-prod
+```
+
+## Monitoring Setup
+
+See [Monitoring and Observability](/deployment/monitoring) for:
+
+- Health check endpoints
+- Sentry error tracking
+- Logging configuration
+- Performance metrics
+
+## Post-Deployment Verification
+
+```bash
+# 1. Check basic health
+curl https://api.linkvite.io/health
+
+# 2. Check all dependencies
+curl https://api.linkvite.io/health/deep
+
+# 3. Verify database connection
+docker exec app-prod psql $POSTGRES_DSN -c "SELECT 1;"
+
+# 4. Check Redis
+docker exec redis redis-cli PING
+
+# 5. Check NATS
+docker exec nats nats server check connection
+
+# 6. View application logs
+docker logs -f app-prod
+
+# 7. Monitor Sentry for errors
+# Check Sentry dashboard
+```
+
+## Emergency Procedures
+
+### Application Crash
+
+```bash
+# View crash logs
+docker logs app-prod --tail 100
+
+# Restart application
+docker restart app-prod
+
+# If persistent, rollback
+./scripts/rollback.sh
+```
+
+### Database Issues
+
+```bash
+# Check database connections
+SELECT count(*) FROM pg_stat_activity WHERE datname = 'cultus_production';
+
+# Kill long-running queries
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity 
+WHERE state = 'active' AND query_start < NOW() - INTERVAL '5 minutes';
+
+# Restore from backup
+psql $POSTGRES_DSN < backup.sql
+```
+
+### Redis Failure
+
+```bash
+# Restart Redis
+docker restart redis
+
+# Clear cache if corrupted
+docker exec redis redis-cli FLUSHDB
+```
+
+## Compliance & Auditing
+
+### Logging Requirements
+
+- All requests logged via Zap
+- Structured JSON logs in production
+- Sentry for error tracking
+- Access logs via reverse proxy
+
+### Data Retention
+
+- User data: Indefinite (until user deletes account)
+- Logs: 90 days
+- Backups: 30 days
+- Deleted accounts: 30 days soft delete (see `deleted_at` column)
+
+## Next Steps
+
+- [Docker Deployment Guide](/deployment/docker)
+- [Monitoring and Observability](/deployment/monitoring)

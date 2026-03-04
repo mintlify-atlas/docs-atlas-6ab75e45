@@ -1,0 +1,293 @@
+---
+title: 'Get Bookmarks'
+api: 'GET /bookmarks'
+---
+
+Retrieve bookmarks with filtering, searching, and pagination.
+
+## Get Single Bookmark
+
+`GET /bookmarks/:id`
+
+Retrieve a single bookmark by ID.
+
+<ParamField path="id" type="string" required>
+  Bookmark ID (prefixed with `bm_`)
+</ParamField>
+
+<ResponseExample>
+```json
+{
+  "data": {
+    "id": "bm_abc123",
+    "url": "https://example.com",
+    "title": "Example Page",
+    "description": "An example webpage",
+    "thumbnail": "https://example.com/image.jpg",
+    "icon": "https://example.com/favicon.ico",
+    "type": "website",
+    "status": "active",
+    "processing": false,
+    "collection_id": "col_xyz789",
+    "collection_name": "My Collection",
+    "tags": "tech,reference",
+    "starred": true,
+    "allow_comments": true,
+    "views": 42,
+    "size": 0,
+    "archive_status": "pending",
+    "archive_size": 0,
+    "is_broken": false,
+    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": "2024-01-16T14:20:00Z",
+    "last_opened_at": "2024-01-17T09:15:00Z",
+    "owner_id": "usr_def456",
+    "owner_name": "John Doe",
+    "owner_username": "johndoe",
+    "owner_avatar": "https://example.com/avatar.jpg",
+    "role": "admin"
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## List Bookmarks
+
+`GET /bookmarks`
+
+Retrieve a paginated list of bookmarks for the authenticated user.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of items per page (max: 100)
+</ParamField>
+
+<ParamField query="status" type="string" default="active">
+  Filter by status:
+  - `active` - Active bookmarks
+  - `trashed` - Deleted bookmarks
+  - `starred` - Starred bookmarks only
+  - `highlighted` - Bookmarks with highlights
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search query to filter bookmarks by title, description, or URL
+</ParamField>
+
+<ParamField query="types" type="string">
+  Filter by content types (comma-separated):
+  - `website` - Web pages
+  - `article` - Articles
+  - `video` - Videos
+  - `image` - Images
+  - `audio` - Audio files
+  - `document` - Documents
+  - `pdf` - PDF files
+  - `code` - Code snippets
+  
+  Example: `types=article,video`
+</ParamField>
+
+<ParamField query="sort_by" type="string" default="created_at">
+  Field to sort by:
+  - `created_at` - Creation date
+  - `updated_at` - Last update date
+  - `title` - Alphabetical by title
+  - `views` - View count
+  - `last_opened_at` - Last opened date
+</ParamField>
+
+<ParamField query="sort_order" type="integer" default="0">
+  Sort order:
+  - `0` - Descending
+  - `1` - Ascending
+</ParamField>
+
+### Response
+
+<ResponseExample>
+```json
+{
+  "data": {
+    "bookmarks": [
+      {
+        "id": "bm_abc123",
+        "url": "https://example.com",
+        "title": "Example Page",
+        "description": "An example webpage",
+        "thumbnail": "https://example.com/image.jpg",
+        "icon": "https://example.com/favicon.ico",
+        "type": "website",
+        "status": "active",
+        "collection_id": "col_xyz789",
+        "collection_name": "My Collection",
+        "tags": "tech,reference",
+        "starred": false,
+        "role": "admin",
+        "created_at": "2024-01-15T10:30:00Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 150,
+      "total_pages": 8,
+      "has_next": true,
+      "has_prev": false
+    }
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## List All Bookmarks
+
+`GET /bookmarks/all`
+
+Retrieve all bookmarks for the authenticated user without pagination. Useful for mobile apps requiring local-first sync.
+
+<ResponseExample>
+```json
+{
+  "data": {
+    "bookmarks": [
+      {
+        "id": "bm_abc123",
+        "url": "https://example.com",
+        "title": "Example Page",
+        "type": "website",
+        "starred": false,
+        "created_at": "2024-01-15T10:30:00Z"
+      }
+    ]
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## Get Collection Bookmarks
+
+`GET /collections/:id/bookmarks`
+
+Retrieve bookmarks from a specific collection.
+
+<ParamField path="id" type="string" required>
+  Collection ID (prefixed with `col_`)
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Items per page
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search query
+</ParamField>
+
+<ParamField query="types" type="string">
+  Filter by content types (comma-separated)
+</ParamField>
+
+<ParamField query="sort_by" type="string">
+  Field to sort by
+</ParamField>
+
+<ParamField query="sort_order" type="integer">
+  Sort order (0 = desc, 1 = asc)
+</ParamField>
+
+<ResponseExample>
+```json
+{
+  "data": {
+    "bookmarks": [
+      {
+        "id": "bm_abc123",
+        "url": "https://example.com",
+        "title": "Example Page",
+        "collection_id": "col_xyz789",
+        "collection_name": "My Collection",
+        "starred": false,
+        "role": "admin",
+        "created_at": "2024-01-15T10:30:00Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 45,
+      "total_pages": 3
+    },
+    "collection_id": "col_xyz789"
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## Check Bookmark Exists
+
+`POST /bookmarks/exists`
+
+Check if a bookmark with a specific URL already exists.
+
+<ParamField body="url" type="string" required>
+  URL to check
+</ParamField>
+
+<ParamField body="collection" type="string">
+  Collection ID to scope the check to
+</ParamField>
+
+<ResponseExample>
+```json
+{
+  "message": "bookmark exists",
+  "data": {
+    "exists": true,
+    "bookmark": {
+      "id": "bm_abc123",
+      "url": "https://example.com",
+      "title": "Example Page",
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  }
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json
+{
+  "message": "bookmark does not exist",
+  "data": {
+    "exists": false
+  }
+}
+```
+</ResponseExample>
+
+## Error Responses
+
+<ResponseField name="403" type="error">
+  No permission to view bookmark or collection
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Bookmark or collection not found
+</ResponseField>

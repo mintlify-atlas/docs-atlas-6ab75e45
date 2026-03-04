@@ -1,0 +1,73 @@
+---
+title: "Delete RSS Feeds"
+description: "Remove RSS feed subscriptions in bulk"
+---
+
+## POST /rss-feeds/batch-delete
+
+Delete multiple RSS feed subscriptions at once. Optionally delete all bookmarks created from those feeds.
+
+### Authentication
+
+Requires authentication with `rss_feed:delete` scope.
+
+### Request Body
+
+<ParamField body="rss_feeds" type="array" required>
+  Array of RSS feed IDs to delete (with `rss_` prefix)
+</ParamField>
+
+<ParamField body="delete_all_items" type="boolean" default="false">
+  Whether to also delete all bookmarks created from these feeds
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="Response Data">
+    <ResponseField name="count" type="integer">
+      Number of feeds deleted
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "RSS feeds deleted",
+  "data": {
+    "count": 3
+  }
+}
+```
+</ResponseExample>
+
+### Validation
+
+- At least one RSS feed ID is required
+- Maximum batch size is limited by server configuration
+- All IDs must be valid and prefixed with `rss_`
+- Deletion is processed asynchronously via queue
+
+### Example Request
+
+```bash
+curl -X POST https://api.cultus.app/rss-feeds/batch-delete \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rss_feeds": ["rss_abc123", "rss_def456", "rss_ghi789"],
+    "delete_all_items": true
+  }'
+```
+
+### Notes
+
+- Deletion happens asynchronously in the background
+- If `delete_all_items` is true, all bookmarks from these feeds are permanently deleted
+- WebSocket events are sent to notify clients of deletion
+- This operation cannot be undone

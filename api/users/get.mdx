@@ -1,0 +1,105 @@
+---
+title: "Get User Profile"
+api: "GET /user"
+description: "Retrieve the authenticated user's profile information"
+---
+
+## Authentication
+
+Requires a valid authentication token in the request headers.
+
+## Response
+
+Returns the complete user profile object.
+
+<ResponseField name="id" type="string" required>
+  Unique public identifier for the user (prefixed with `usr_`)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  User's display name
+</ResponseField>
+
+<ResponseField name="email" type="string" required>
+  User's email address
+</ResponseField>
+
+<ResponseField name="username" type="string" required>
+  Unique username (2-30 characters, lowercase)
+</ResponseField>
+
+<ResponseField name="avatar" type="string" required>
+  URL to the user's avatar image
+</ResponseField>
+
+<ResponseField name="email_verified" type="boolean" required>
+  Whether the user's email address has been verified
+</ResponseField>
+
+<ResponseField name="account_type" type="string" required>
+  Account tier: `free`, `pro`, or `enterprise`
+</ResponseField>
+
+<ResponseField name="status" type="string" required>
+  Account status: `active`, `suspended`, or `deleted`
+</ResponseField>
+
+<ResponseField name="verified" type="boolean" required>
+  Whether the user account has been verified (badge status)
+</ResponseField>
+
+<ResponseField name="folder_name" type="string" required>
+  Custom name for the user's default folder
+</ResponseField>
+
+<ResponseField name="private_account" type="boolean" required>
+  Whether the user's profile and bookmarks are private
+</ResponseField>
+
+<ResponseField name="push_enabled" type="boolean" required>
+  Whether push notifications are enabled
+</ResponseField>
+
+<ResponseField name="email_enabled" type="boolean" required>
+  Whether email notifications are enabled
+</ResponseField>
+
+<ResponseField name="in_app_enabled" type="boolean" required>
+  Whether in-app notifications are enabled
+</ResponseField>
+
+<ResponseField name="last_login_at" type="string" required>
+  ISO 8601 timestamp of the user's last login (nullable)
+</ResponseField>
+
+<ResponseField name="created_at" type="string" required>
+  ISO 8601 timestamp of account creation
+</ResponseField>
+
+<ResponseField name="updated_at" type="string" required>
+  ISO 8601 timestamp of last profile update
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "id": "usr_abc123def456",
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "username": "janedoe",
+  "avatar": "https://cdn.cultus.app/avatars/usr_abc123def456.png",
+  "email_verified": true,
+  "account_type": "pro",
+  "status": "active",
+  "verified": true,
+  "folder_name": "My Bookmarks",
+  "private_account": false,
+  "push_enabled": true,
+  "email_enabled": true,
+  "in_app_enabled": true,
+  "last_login_at": "2024-01-15T10:30:00Z",
+  "created_at": "2023-06-01T08:00:00Z",
+  "updated_at": "2024-01-15T10:30:00Z"
+}
+```
+</ResponseExample>

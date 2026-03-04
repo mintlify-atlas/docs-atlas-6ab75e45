@@ -1,0 +1,86 @@
+---
+title: "Update RSS Feed"
+description: "Modify RSS feed settings and metadata"
+---
+
+## PATCH /rss-feeds/:id
+
+Update an RSS feed's title, description, or collection assignment.
+
+### Authentication
+
+Requires authentication with `rss_feed:edit` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  RSS feed ID (with `rss_` prefix)
+</ParamField>
+
+### Request Body
+
+All fields are optional. Only include fields you want to update.
+
+<ParamField body="title" type="string">
+  Custom title for the feed (overrides feed's default title)
+</ParamField>
+
+<ParamField body="description" type="string">
+  Custom description for the feed
+</ParamField>
+
+<ParamField body="collection_id" type="string">
+  Collection ID to move the feed to. Pass empty string `""` to remove from collection
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Updated feed fields
+  <Expandable title="Updated Fields">
+    <ResponseField name="title" type="string">
+      Updated title
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      Updated description
+    </ResponseField>
+    <ResponseField name="collection_id" type="string">
+      Updated collection ID
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "RSS feed updated successfully",
+  "data": {
+    "title": "My Tech Blog",
+    "description": "Latest tech articles",
+    "collection_id": "col_xyz789"
+  }
+}
+```
+</ResponseExample>
+
+### Example Request
+
+```bash
+curl -X PATCH https://api.cultus.app/rss-feeds/rss_abc123 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "My Tech Blog",
+    "collection_id": "col_xyz789"
+  }'
+```
+
+### Notes
+
+- Changes are broadcast via WebSocket to connected clients
+- Collection must exist and you must have admin access
+- Pass empty string for `collection_id` to remove feed from collection

@@ -1,0 +1,307 @@
+---
+title: 'Create Bookmark'
+api: 'POST /bookmarks'
+---
+
+Create bookmarks in various ways: from URL, file upload, manual entry, browser tabs, or from parsed link data.
+
+## Methods
+
+### Create from URL
+
+Create a bookmark from a URL. The system will automatically fetch and parse metadata.
+
+<ParamField body="url" type="string" required>
+  The URL to bookmark
+</ParamField>
+
+<ParamField body="title" type="string">
+  Custom title (defaults to parsed title)
+</ParamField>
+
+<ParamField body="description" type="string">
+  Custom description
+</ParamField>
+
+<ParamField body="collection" type="string">
+  Collection ID to add the bookmark to
+</ParamField>
+
+<ParamField body="tags" type="string">
+  Comma-separated list of tags
+</ParamField>
+
+<ParamField body="cover" type="string">
+  Custom cover image URL or base64 encoded image
+</ParamField>
+
+<ParamField body="starred" type="boolean">
+  Whether to star the bookmark immediately
+</ParamField>
+
+<ResponseExample>
+```json
+{
+  "message": "bookmark created!",
+  "data": {
+    "id": "bm_abc123",
+    "url": "https://example.com",
+    "title": "Example Page",
+    "description": "An example webpage",
+    "thumbnail": "https://example.com/image.jpg",
+    "icon": "https://example.com/favicon.ico",
+    "type": "website",
+    "status": "active",
+    "processing": true,
+    "collection_id": "col_xyz789",
+    "collection_name": "My Collection",
+    "tags": "tech,reference",
+    "starred": false,
+    "allow_comments": true,
+    "created_at": "2024-01-15T10:30:00Z",
+    "owner_id": "usr_def456",
+    "owner_name": "John Doe",
+    "owner_username": "johndoe",
+    "role": "admin"
+  }
+}
+```
+</ResponseExample>
+
+---
+
+### Create Manual Bookmark
+
+Create a bookmark manually with full control over metadata. Use endpoint: `POST /bookmarks/manual`
+
+<ParamField body="url" type="string" required>
+  The URL to bookmark
+</ParamField>
+
+<ParamField body="title" type="string" required>
+  Bookmark title
+</ParamField>
+
+<ParamField body="description" type="string">
+  Bookmark description
+</ParamField>
+
+<ParamField body="collection" type="string">
+  Collection ID to add the bookmark to
+</ParamField>
+
+<ParamField body="tags" type="string">
+  Comma-separated list of tags
+</ParamField>
+
+<ParamField body="cover" type="string">
+  Cover image URL or base64 encoded image
+</ParamField>
+
+<ParamField body="favicon" type="string">
+  Favicon URL
+</ParamField>
+
+<ParamField body="starred" type="boolean">
+  Whether to star the bookmark
+</ParamField>
+
+<ParamField body="allow_comments" type="boolean">
+  Whether to allow comments on this bookmark
+</ParamField>
+
+<ResponseExample>
+```json
+{
+  "message": "bookmark created!",
+  "data": {
+    "id": "bm_abc123",
+    "url": "https://example.com",
+    "title": "Custom Title",
+    "description": "Custom description",
+    "thumbnail": "https://example.com/cover.jpg",
+    "icon": "https://example.com/favicon.ico",
+    "type": "website",
+    "status": "active",
+    "processing": false,
+    "tags": "important,work",
+    "starred": true,
+    "allow_comments": true,
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+</ResponseExample>
+
+---
+
+### Create from File
+
+Upload a file as a bookmark. Supports PDFs, images, videos, audio, and documents. Use endpoint: `POST /bookmarks/file`
+
+<Info>Maximum file size: 100MB. Files count toward your storage quota.</Info>
+
+<ParamField body="file" type="file" required>
+  The file to upload
+</ParamField>
+
+<ParamField body="title" type="string">
+  Custom title (defaults to filename)
+</ParamField>
+
+<ParamField body="description" type="string">
+  File description
+</ParamField>
+
+<ParamField body="collection" type="string">
+  Collection ID to add the bookmark to
+</ParamField>
+
+<ParamField body="tags" type="string">
+  Comma-separated list of tags
+</ParamField>
+
+<ParamField body="starred" type="boolean">
+  Whether to star the bookmark
+</ParamField>
+
+<ParamField body="allow_comments" type="boolean">
+  Whether to allow comments on this file
+</ParamField>
+
+<ResponseExample>
+```json
+{
+  "message": "processing file, you will be notified when it's done"
+}
+```
+</ResponseExample>
+
+---
+
+### Create from Tabs
+
+Batch create bookmarks from browser tabs. Use endpoint: `POST /bookmarks/tabs`
+
+<ParamField body="tabs" type="array" required>
+  Array of tab objects with `url` and `title` properties
+</ParamField>
+
+<ParamField body="collection" type="string">
+  Collection ID to add all bookmarks to
+</ParamField>
+
+<RequestExample>
+```json
+{
+  "tabs": [
+    {
+      "url": "https://example.com/page1",
+      "title": "Page 1"
+    },
+    {
+      "url": "https://example.com/page2",
+      "title": "Page 2"
+    }
+  ],
+  "collection": "col_xyz789"
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "message": "processing tabs, you will be notified when it's done"
+}
+```
+</ResponseExample>
+
+---
+
+### Create from Parsed Data
+
+Create a bookmark from pre-parsed metadata. Use endpoint: `POST /bookmarks/from-parsed-link`
+
+<ParamField body="data" type="object" required>
+  Parsed metadata object
+</ParamField>
+
+<ParamField body="data.url" type="string" required>
+  The URL
+</ParamField>
+
+<ParamField body="data.title" type="string" required>
+  Page title
+</ParamField>
+
+<ParamField body="data.description" type="string">
+  Page description
+</ParamField>
+
+<ParamField body="data.image" type="string">
+  Thumbnail image URL
+</ParamField>
+
+<ParamField body="data.favicon" type="string">
+  Favicon URL
+</ParamField>
+
+<ParamField body="data.type" type="string">
+  Content type (e.g., "website", "article", "video")
+</ParamField>
+
+<ParamField body="collection" type="string">
+  Collection ID to add the bookmark to
+</ParamField>
+
+<RequestExample>
+```json
+{
+  "data": {
+    "url": "https://example.com",
+    "title": "Example Page",
+    "description": "A great example",
+    "image": "https://example.com/og-image.jpg",
+    "favicon": "https://example.com/favicon.ico",
+    "type": "article"
+  },
+  "collection": "col_xyz789"
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "message": "bookmark created!",
+  "data": {
+    "id": "bm_abc123",
+    "url": "https://example.com",
+    "title": "Example Page",
+    "description": "A great example",
+    "thumbnail": "https://example.com/og-image.jpg",
+    "icon": "https://example.com/favicon.ico",
+    "type": "article",
+    "status": "active",
+    "processing": false,
+    "collection_id": "col_xyz789",
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+</ResponseExample>
+
+## Error Responses
+
+<ResponseField name="400" type="error">
+  Invalid URL, file too large, or storage quota exceeded
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  No permission to create bookmark in specified collection
+</ResponseField>
+
+<ResponseField name="422" type="error">
+  Invalid request body or validation errors
+</ResponseField>

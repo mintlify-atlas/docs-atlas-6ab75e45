@@ -1,0 +1,98 @@
+---
+title: "Update Reminder"
+description: "Modify reminder settings and status"
+---
+
+## PATCH /reminders/:id
+
+Update an existing reminder's title, due date, items, status, or recurrence.
+
+### Authentication
+
+Requires authentication with `reminder:edit` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Reminder ID (with `rem_` prefix)
+</ParamField>
+
+### Request Body
+
+All fields are optional. Only include fields you want to update.
+
+<ParamField body="title" type="string">
+  Reminder title
+</ParamField>
+
+<ParamField body="description" type="string">
+  Reminder description or note
+</ParamField>
+
+<ParamField body="due_date" type="integer">
+  Unix timestamp for the reminder. If set to less than 5 minutes from now, status will automatically be set to `"inactive"`
+</ParamField>
+
+<ParamField body="status" type="string">
+  `"active"` or `"inactive"`. Use to manually enable or disable the reminder
+</ParamField>
+
+<ParamField body="interval" type="string">
+  Recurrence interval: `"none"`, `"hourly"`, `"daily"`, `"weekly"`, `"bi-weekly"`, `"monthly"`, `"quarterly"`, `"biannual"`, `"yearly"`
+</ParamField>
+
+<ParamField body="items" type="array">
+  Array of bookmark or collection IDs to update the reminder's items
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Updated reminder object with all fields
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "reminder updated",
+  "data": {
+    "id": "rem_abc123",
+    "user_id": "usr_xyz789",
+    "title": "Weekly Review",
+    "description": "Updated description",
+    "type": "bookmarks",
+    "items": "bm_aaa111,bm_bbb222,bm_ccc333",
+    "due_date": 1735689600,
+    "interval": "daily",
+    "status": "active",
+    "created_at": "2026-03-04T10:00:00Z",
+    "updated_at": "2026-03-04T15:30:00Z"
+  }
+}
+```
+</ResponseExample>
+
+### Example Request
+
+```bash
+curl -X PATCH https://api.cultus.app/reminders/rem_abc123 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Weekly Review",
+    "due_date": 1735689600,
+    "status": "active",
+    "items": ["bm_aaa111", "bm_bbb222", "bm_ccc333"]
+  }'
+```
+
+### Notes
+
+- Automatic status management: due dates within 5 minutes are set to `"inactive"`
+- Items are deduplicated and validated
+- All item IDs must be valid bookmark or collection IDs
+- Changes trigger WebSocket events to connected clients

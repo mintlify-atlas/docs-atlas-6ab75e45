@@ -1,0 +1,717 @@
+---
+title: 'API Key Authentication'
+description: 'Generate and use API keys for server-to-server authentication and automation'
+---
+
+## Overview
+
+API keys provide a simple authentication method for server-to-server communication and automation scripts. They are long-lived tokens that don't require user interaction to refresh.
+
+<Info>
+  API keys are only available to Pro users and have a limit of 5 keys per account.
+</Info>
+
+## When to Use API Keys
+
+API keys are ideal for:
+
+- **Backend Services:** Server-to-server integrations
+- **Automation Scripts:** Scheduled tasks and workflows
+- **CI/CD Pipelines:** Automated deployments and testing
+- **Webhooks:** Receiving events from external services
+- **Command-line Tools:** CLI applications and scripts
+
+<Warning>
+  API keys grant full access to your account. Never use them in client-side applications or commit them to version control.
+</Warning>
+
+## Generating API Keys
+
+Create a new API key with a descriptive name.
+
+### Endpoint
+
+```
+POST /v1/api-keys
+```
+
+### Authentication
+
+Requires a valid user access token (Pro user only).
+
+```
+Authorization: Bearer {access_token}
+```
+
+### Request Body
+
+```json
+{
+  "name": "Production Server"
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "API key generated",
+  "data": {
+    "id": "key_abc123xyz",
+    "user_id": "usr_def456uvw",
+    "name": "Production Server",
+    "secret": "sec_0123456789abcdefghijklmnopqrstuvwxyz",
+    "status": "active",
+    "usage_count": 0,
+    "created_at": "2024-03-15T10:30:00Z",
+    "updated_at": "2024-03-15T10:30:00Z",
+    "last_used_at": null,
+    "revoked_at": null
+  }
+}
+```
+
+<Warning>
+  The `secret` is only shown once during creation. Store it securely - you cannot retrieve it later!
+</Warning>
+
+### API Key Structure
+
+| Field | Description |
+|-------|-------------|
+| `id` | Public identifier (prefixed with `key_`) |
+| `user_id` | Owner's user ID |
+| `name` | Descriptive name for the key |
+| `secret` | The actual API key (prefixed with `sec_`) - only shown on creation |
+| `status` | Key status: `active`, `inactive`, or `revoked` |
+| `usage_count` | Number of times the key has been used |
+| `created_at` | Creation timestamp |
+| `updated_at` | Last update timestamp |
+| `last_used_at` | Last usage timestamp (null if never used) |
+| `revoked_at` | Revocation timestamp (null if active) |
+
+### Example
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch('https://api.linkvite.io/v1/api-keys', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${userAccessToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'Production Server'
+  })
+});
+
+const data = await response.json();
+const apiKey = data.data.secret;
+
+// Store securely!
+console.log('API Key:', apiKey);
+// Output: sec_0123456789abcdefghijklmnopqrstuvwxyz
+```
+
+```python Python
+import requests
+import os
+
+response = requests.post(
+    'https://api.linkvite.io/v1/api-keys',
+    headers={
+        'Authorization': f'Bearer {user_access_token}',
+        'Content-Type': 'application/json'
+    },
+    json={'name': 'Production Server'}
+)
+
+data = response.json()
+api_key = data['data']['secret']
+
+# Store in environment variable
+os.environ['LINKVITE_API_KEY'] = api_key
+print(f'API Key: {api_key}')
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "net/http"
+)
+
+type CreateKeyRequest struct {
+    Name string `json:"name"`
+}
+
+func createAPIKey(userToken string) {
+    reqBody, _ := json.Marshal(CreateKeyRequest{
+        Name: "Production Server",
+    })
+
+    req, _ := http.NewRequest(
+        "POST",
+        "https://api.linkvite.io/v1/api-keys",
+        bytes.NewBuffer(reqBody),
+    )
+    req.Header.Set("Authorization", "Bearer "+userToken)
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    // Handle response...
+}
+```
+
+```curl cURL
+curl -X POST https://api.linkvite.io/v1/api-keys \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Production Server"
+  }'
+```
+
+</CodeGroup>
+
+## Using API Keys
+
+Include the API key in the `Authorization` header using the `Bearer` scheme.
+
+### Request Format
+
+```http
+GET /v1/bookmarks HTTP/1.1
+Host: api.linkvite.io
+Authorization: Bearer sec_0123456789abcdefghijklmnopqrstuvwxyz
+Content-Type: application/json
+```
+
+### Example
+
+<CodeGroup>
+
+```javascript JavaScript
+const API_KEY = process.env.LINKVITE_API_KEY;
+
+const response = await fetch('https://api.linkvite.io/v1/bookmarks', {
+  headers: {
+    'Authorization': `Bearer ${API_KEY}`,
+    'Content-Type': 'application/json'
+  }
+});
+
+const bookmarks = await response.json();
+console.log(bookmarks);
+```
+
+```python Python
+import os
+import requests
+
+API_KEY = os.environ.get('LINKVITE_API_KEY')
+
+headers = {
+    'Authorization': f'Bearer {API_KEY}',
+    'Content-Type': 'application/json'
+}
+
+response = requests.get(
+    'https://api.linkvite.io/v1/bookmarks',
+    headers=headers
+)
+
+bookmarks = response.json()
+print(bookmarks)
+```
+
+```go Go
+package main
+
+import (
+    "net/http"
+    "os"
+)
+
+func fetchBookmarks() {
+    apiKey := os.Getenv("LINKVITE_API_KEY")
+
+    req, _ := http.NewRequest(
+        "GET",
+        "https://api.linkvite.io/v1/bookmarks",
+        nil,
+    )
+    req.Header.Set("Authorization", "Bearer "+apiKey)
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    // Handle response...
+}
+```
+
+```bash Shell Script
+#!/bin/bash
+
+API_KEY="sec_0123456789abcdefghijklmnopqrstuvwxyz"
+
+curl -X GET https://api.linkvite.io/v1/bookmarks \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json"
+```
+
+</CodeGroup>
+
+## Managing API Keys
+
+### List All API Keys
+
+Retrieve all API keys for your account.
+
+#### Endpoint
+
+```
+GET /v1/api-keys
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "key_abc123xyz",
+      "user_id": "usr_def456uvw",
+      "name": "Production Server",
+      "status": "active",
+      "usage_count": 1523,
+      "created_at": "2024-03-15T10:30:00Z",
+      "last_used_at": "2024-03-20T15:45:00Z"
+    },
+    {
+      "id": "key_xyz789abc",
+      "user_id": "usr_def456uvw",
+      "name": "CI/CD Pipeline",
+      "status": "active",
+      "usage_count": 342,
+      "created_at": "2024-02-10T08:15:00Z",
+      "last_used_at": "2024-03-19T12:30:00Z"
+    }
+  ]
+}
+```
+
+<Note>
+  The `secret` field is never returned when listing keys. Secrets are only shown during creation.
+</Note>
+
+### Update API Key
+
+Update the name of an existing API key.
+
+#### Endpoint
+
+```
+PUT /v1/api-keys/{key_id}
+```
+
+#### Request Body
+
+```json
+{
+  "name": "Updated Production Server"
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "message": "API key updated",
+  "data": {
+    "id": "key_abc123xyz",
+    "name": "Updated Production Server",
+    "status": "active",
+    "usage_count": 1523,
+    "updated_at": "2024-03-20T16:00:00Z"
+  }
+}
+```
+
+### Delete API Key
+
+Permanently delete an API key. This action cannot be undone.
+
+#### Endpoint
+
+```
+DELETE /v1/api-keys/{key_id}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "message": "API key deleted"
+}
+```
+
+<Warning>
+  Deleting an API key immediately invalidates it. Any services using this key will lose access.
+</Warning>
+
+## API Key Authentication Flow
+
+API keys use the same JWT token system as user authentication, but with `auth_type: "api_key"`.
+
+### Internal Flow
+
+1. Client sends request with API key in `Authorization` header
+2. Server extracts the API key secret
+3. Server validates the key:
+   - Checks if key exists in database
+   - Verifies status is `active`
+   - Checks if key is cached for performance
+4. Server generates a JWT access token with:
+   - `auth_type: "api_key"`
+   - `sub: user_id` (key owner)
+   - No scopes (full access)
+5. Server processes the request with user context
+6. Server updates `usage_count` and `last_used_at`
+
+### Token Claims
+
+When using an API key, the generated JWT token contains:
+
+```json
+{
+  "sub": "usr_def456uvw",
+  "iss": "linkvite",
+  "aud": ["linkvite"],
+  "jti": "550e8400-e29b-41d4-a716",
+  "iat": 1678901234,
+  "exp": 1678903034,
+  "auth_type": "api_key",
+  "token_type": "access",
+  "scopes": ""
+}
+```
+
+Note: `auth_type` is `"api_key"` and `scopes` is empty (API keys have full access).
+
+## API Key Scopes and Permissions
+
+<Info>
+  Unlike OAuth tokens, API keys grant full access to your account with no scope restrictions.
+</Info>
+
+API keys can:
+
+✅ **Read** all resources (bookmarks, collections, user data, etc.)
+✅ **Create** new resources
+✅ **Update** existing resources
+✅ **Delete** resources
+✅ **Manage** account settings
+✅ **Generate** new API keys (if Pro user)
+
+API keys **cannot**:
+
+❌ Perform OAuth flows on behalf of user
+❌ Access other users' data
+❌ Elevate privileges beyond the account owner
+
+## API Key Status
+
+### Active
+
+Key is valid and can be used for authentication.
+
+```json
+{
+  "status": "active"
+}
+```
+
+### Inactive
+
+Key is temporarily disabled but not deleted. Can be reactivated.
+
+```json
+{
+  "status": "inactive"
+}
+```
+
+### Revoked
+
+Key is permanently disabled and cannot be reactivated.
+
+```json
+{
+  "status": "revoked",
+  "revoked_at": "2024-03-20T16:00:00Z"
+}
+```
+
+## Security Best Practices
+
+<Warning>
+  API keys are as powerful as your password. Treat them with extreme care.
+</Warning>
+
+### Storage
+
+✅ **Do:**
+- Store in environment variables
+- Use secret management systems (AWS Secrets Manager, HashiCorp Vault)
+- Keep in `.env` files that are `.gitignore`d
+- Encrypt keys at rest in databases
+
+❌ **Don't:**
+- Commit to version control
+- Hardcode in source files
+- Expose in client-side code
+- Share via insecure channels (email, chat)
+- Log API keys in application logs
+
+### Rotation
+
+- Rotate API keys regularly (every 90 days recommended)
+- Rotate immediately if key is compromised
+- Delete unused keys
+- Use descriptive names to track key usage
+
+### Monitoring
+
+- Monitor `usage_count` for unusual activity
+- Check `last_used_at` to identify inactive keys
+- Set up alerts for failed authentication attempts
+- Review API key list regularly
+
+### Access Control
+
+- Create separate keys for different services
+- Use the minimum number of keys necessary
+- Delete keys when services are decommissioned
+- Never share keys between environments (dev/staging/prod)
+
+## Rate Limiting
+
+API key requests are subject to the same rate limits as user authentication:
+
+- **Standard users:** 100 requests per minute
+- **Pro users:** 1000 requests per minute
+
+Exceeding rate limits returns:
+
+```json
+{
+  "success": false,
+  "message": "Rate limit exceeded. Please try again later.",
+  "error_code": "rate_limit_exceeded"
+}
+```
+
+## Error Handling
+
+### Invalid API Key
+
+```json
+{
+  "success": false,
+  "message": "Invalid API key",
+  "error_code": "invalid_api_key"
+}
+```
+
+**Causes:**
+- Key doesn't exist
+- Key is inactive or revoked
+- Key format is incorrect
+- Key belongs to different account
+
+### Pro Subscription Required
+
+```json
+{
+  "success": false,
+  "message": "you need to be a pro user to use API keys",
+  "error_code": "pro_required"
+}
+```
+
+**Solution:** Upgrade to Pro subscription
+
+### Key Limit Reached
+
+```json
+{
+  "success": false,
+  "message": "you have reached the limit of API keys (5)",
+  "error_code": "api_key_limit_reached"
+}
+```
+
+**Solution:** Delete unused keys before creating new ones
+
+## Example: Complete Integration
+
+<CodeGroup>
+
+```javascript JavaScript (Node.js)
+const axios = require('axios');
+require('dotenv').config();
+
+class LinkviteAPI {
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+    this.baseURL = 'https://api.linkvite.io';
+  }
+
+  async request(method, endpoint, data = null) {
+    try {
+      const response = await axios({
+        method,
+        url: `${this.baseURL}${endpoint}`,
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        data
+      });
+      return response.data;
+    } catch (error) {
+      console.error('API Error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async getBookmarks() {
+    return this.request('GET', '/v1/bookmarks');
+  }
+
+  async createBookmark(url, title) {
+    return this.request('POST', '/v1/bookmarks', { url, title });
+  }
+
+  async deleteBookmark(id) {
+    return this.request('DELETE', `/v1/bookmarks/${id}`);
+  }
+}
+
+// Usage
+const api = new LinkviteAPI(process.env.LINKVITE_API_KEY);
+
+async function main() {
+  // Get bookmarks
+  const bookmarks = await api.getBookmarks();
+  console.log('Bookmarks:', bookmarks);
+
+  // Create bookmark
+  const newBookmark = await api.createBookmark(
+    'https://example.com',
+    'Example Site'
+  );
+  console.log('Created:', newBookmark);
+}
+
+main();
+```
+
+```python Python
+import os
+import requests
+from typing import Optional, Dict, Any
+
+class LinkviteAPI:
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.base_url = 'https://api.linkvite.io'
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        })
+
+    def request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Any:
+        url = f'{self.base_url}{endpoint}'
+        response = self.session.request(method, url, json=data)
+        response.raise_for_status()
+        return response.json()
+
+    def get_bookmarks(self):
+        return self.request('GET', '/v1/bookmarks')
+
+    def create_bookmark(self, url: str, title: str):
+        return self.request('POST', '/v1/bookmarks', {
+            'url': url,
+            'title': title
+        })
+
+    def delete_bookmark(self, bookmark_id: str):
+        return self.request('DELETE', f'/v1/bookmarks/{bookmark_id}')
+
+# Usage
+if __name__ == '__main__':
+    api = LinkviteAPI(os.environ['LINKVITE_API_KEY'])
+    
+    # Get bookmarks
+    bookmarks = api.get_bookmarks()
+    print('Bookmarks:', bookmarks)
+    
+    # Create bookmark
+    new_bookmark = api.create_bookmark(
+        'https://example.com',
+        'Example Site'
+    )
+    print('Created:', new_bookmark)
+```
+
+</CodeGroup>
+
+## Troubleshooting
+
+### Key Not Working After Creation
+
+1. Verify you copied the entire secret including `sec_` prefix
+2. Check key status is `active`
+3. Ensure your account has Pro subscription
+4. Verify the key wasn't deleted
+
+### 401 Unauthorized Errors
+
+1. Check `Authorization` header format: `Bearer sec_...`
+2. Verify API key is not revoked or inactive
+3. Check if key belongs to correct account
+4. Ensure key hasn't been deleted
+
+### Cannot Create More Keys
+
+- Maximum 5 API keys per Pro account
+- Delete unused keys to create new ones
+- Consider consolidating services under fewer keys
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="JWT Tokens" icon="key" href="/auth/jwt-tokens">
+    Learn about JWT token structure and authentication
+  </Card>
+  <Card title="OAuth 2.0" icon="shield" href="/auth/oauth">
+    Implement OAuth for third-party integrations
+  </Card>
+  <Card title="Rate Limiting" icon="gauge" href="/guides/rate-limiting">
+    Understand API rate limits and quotas
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle API errors gracefully
+  </Card>
+</CardGroup>

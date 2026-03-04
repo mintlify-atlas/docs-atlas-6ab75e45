@@ -1,0 +1,228 @@
+---
+title: "Update User Profile"
+api: "PATCH /user"
+description: "Update the authenticated user's profile information"
+---
+
+## Authentication
+
+Requires a valid authentication token in the request headers.
+
+## Request Body
+
+All fields are optional. Only include fields you want to update.
+
+<ParamField body="name" type="string">
+  User's display name
+</ParamField>
+
+<ParamField body="email" type="string">
+  User's email address (must be valid and unique)
+</ParamField>
+
+<ParamField body="username" type="string">
+  Username (2-30 characters, lowercase, must be unique)
+</ParamField>
+
+<ParamField body="folder_name" type="string">
+  Custom name for the default folder
+</ParamField>
+
+<ParamField body="private_account" type="boolean">
+  Set account visibility to private or public
+</ParamField>
+
+<ParamField body="avatar" type="string">
+  Avatar image (base64 encoded or URL). Accepts JPEG, PNG, or GIF formats.
+</ParamField>
+
+## Response
+
+Returns the updated user profile object with all fields.
+
+<ResponseExample>
+```json
+{
+  "id": "usr_abc123def456",
+  "name": "Jane Smith",
+  "email": "jane.smith@example.com",
+  "username": "janesmith",
+  "avatar": "https://cdn.cultus.app/avatars/usr_abc123def456.png",
+  "email_verified": true,
+  "account_type": "pro",
+  "status": "active",
+  "verified": true,
+  "folder_name": "My Collection",
+  "private_account": true,
+  "push_enabled": true,
+  "email_enabled": true,
+  "in_app_enabled": true,
+  "last_login_at": "2024-01-15T10:30:00Z",
+  "created_at": "2023-06-01T08:00:00Z",
+  "updated_at": "2024-01-15T11:00:00Z"
+}
+```
+</ResponseExample>
+
+## Validation
+
+- **Email**: Must be a valid email format and not already in use by another account
+- **Username**: Must be 2-30 characters, lowercase, and not already taken
+- **Avatar**: Must be a valid image format (JPEG, PNG, or GIF)
+
+## Side Effects
+
+- Email changes will update the associated Stripe customer email if applicable
+- Avatar changes will delete the previous avatar image from storage
+- Profile updates trigger a `user.updated` event
+- User cache is cleared after successful update
+
+---
+
+## Update Settings
+
+<api>PATCH /user/settings</api>
+
+Update notification preferences for the authenticated user.
+
+### Request Body
+
+<ParamField body="push_enabled" type="boolean">
+  Enable or disable push notifications
+</ParamField>
+
+<ParamField body="email_enabled" type="boolean">
+  Enable or disable email notifications (requires verified email)
+</ParamField>
+
+<ParamField body="in_app_enabled" type="boolean">
+  Enable or disable in-app notifications
+</ParamField>
+
+### Response
+
+Returns the updated user object with new notification settings.
+
+<ResponseExample>
+```json
+{
+  "id": "usr_abc123def456",
+  "name": "Jane Smith",
+  "email": "jane.smith@example.com",
+  "username": "janesmith",
+  "push_enabled": true,
+  "email_enabled": true,
+  "in_app_enabled": false,
+  "...": "other user fields"
+}
+```
+</ResponseExample>
+
+### Validation
+
+- Email notifications can only be enabled if the user's email is verified
+- Attempting to enable email notifications without verification returns a 400 error
+
+---
+
+## Change Password
+
+<api>POST /user/password</api>
+
+Change the authenticated user's password.
+
+### Request Body
+
+<ParamField body="old_password" type="string" required>
+  Current password (minimum 6 characters)
+</ParamField>
+
+<ParamField body="new_password" type="string" required>
+  New password (minimum 6 characters)
+</ParamField>
+
+### Response
+
+<ResponseExample>
+```json
+{
+  "message": "password changed successfully"
+}
+```
+</ResponseExample>
+
+### Validation
+
+- Both passwords must be at least 6 characters
+- Old password must match the current password
+- Password is hashed using bcrypt before storage
+
+### Side Effects
+
+- Triggers a `password.changed` event for security notifications
+
+---
+
+## Delete Account
+
+<api>DELETE /user</api>
+
+Mark the authenticated user's account for deletion. The account enters a soft-deleted state and will be permanently removed after 14 days.
+
+### Response
+
+<ResponseExample>
+```json
+{
+  "message": "user deleted"
+}
+```
+</ResponseExample>
+
+### Behavior
+
+- Account status is set to `deleted`
+- User cache is cleared immediately
+- Account data is retained for 14 days before permanent deletion
+- During the 14-day grace period, the account can potentially be restored by support
+
+---
+
+## Export User Data
+
+<api>POST /user/export</api>
+
+Request an export of all user bookmarks in the specified format.
+
+### Query Parameters
+
+<ParamField query="format" type="string" default="html">
+  Export format: `html`, `json`, or `csv`
+</ParamField>
+
+### Response
+
+<ResponseExample>
+```json
+{
+  "message": "exporting data, you will be notified when it's done"
+}
+```
+</ResponseExample>
+
+### Rate Limiting
+
+- Maximum 5 export requests per time period
+- Rate limit is tracked per user
+- Returns 400 error if limit is exceeded
+
+### Validation
+
+- Returns 400 error if no bookmarks exist to export
+- Only accepts `html`, `json`, or `csv` formats
+
+### Behavior
+
+- Export is processed asynchronously via background queue
+- User receives a notification when export is complete
+- Export file is made available for download

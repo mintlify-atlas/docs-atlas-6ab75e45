@@ -1,0 +1,87 @@
+---
+title: "Refresh OAuth Token"
+description: "Obtain a new access token using a refresh token"
+---
+
+## POST /oauth/refresh
+
+Exchange a refresh token for a new set of access and refresh tokens.
+
+### Request Body
+
+<ParamField body="app_id" type="string" required>
+  The client ID of your OAuth application (with `app_` prefix)
+</ParamField>
+
+<ParamField body="refresh_token" type="string" required>
+  The refresh token obtained during authorization
+</ParamField>
+
+### Response
+
+<ResponseField name="token_type" type="string">
+  Always `"bearer"`
+</ResponseField>
+
+<ResponseField name="access_token" type="string">
+  New JWT access token for API requests
+</ResponseField>
+
+<ResponseField name="refresh_token" type="string">
+  New refresh token (previous token is invalidated)
+</ResponseField>
+
+<ResponseField name="access_token_expires_in" type="integer">
+  Access token lifetime in nanoseconds
+</ResponseField>
+
+<ResponseField name="refresh_token_expires_in" type="integer">
+  Refresh token lifetime in nanoseconds
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "token_type": "bearer",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token_expires_in": 3600000000000,
+  "refresh_token_expires_in": 604800000000000
+}
+```
+</ResponseExample>
+
+### Validation
+
+- Refresh token must be valid and not expired
+- Token must be an OAuth token (not a regular auth token)
+- App must exist and be active
+- Token scopes must match the app's current scopes
+- User must still have an active OAuth session with the app
+
+### Error Response
+
+Returns `401 Unauthorized` if:
+- Refresh token is invalid or expired
+- Token is not an OAuth token
+- App doesn't exist or is suspended
+- OAuth session has been revoked
+- Token scopes don't match app scopes
+
+### Example Request
+
+```bash
+curl -X POST https://api.cultus.app/oauth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "app_id": "app_abc123",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }'
+```
+
+### Notes
+
+- Always use the new refresh token for subsequent refresh requests
+- The old refresh token is invalidated after a successful refresh
+- Token refresh updates the app's last used timestamp
+- This endpoint does not require authentication headers (the refresh token itself provides authentication)

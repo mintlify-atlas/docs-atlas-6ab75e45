@@ -1,0 +1,219 @@
+---
+title: "Storage Usage"
+api: "GET /user/storage"
+description: "Get the authenticated user's storage usage summary"
+---
+
+## Authentication
+
+Requires a valid authentication token in the request headers.
+
+## Response
+
+Returns storage usage information in bytes.
+
+<ResponseField name="used" type="number" required>
+  Total bytes of storage currently used by all bookmarks
+</ResponseField>
+
+<ResponseField name="total" type="number" required>
+  Total bytes of storage available based on account type
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "used": 524288000,
+  "total": 5368709120
+}
+```
+</ResponseExample>
+
+## Storage Limits
+
+- **Free accounts**: Limited storage capacity (configurable)
+- **Pro accounts**: Increased storage limit (configurable)
+- **Enterprise accounts**: Custom storage limits
+
+## Caching
+
+Storage usage is cached to improve performance. The cache is automatically invalidated when:
+- New bookmarks are created
+- Bookmarks are deleted
+- Bookmark attachments are modified
+
+---
+
+## Detailed Storage Usage
+
+<api>GET /user/storage/detailed</api>
+
+Get a paginated list of bookmarks sorted by storage size, showing which bookmarks consume the most storage.
+
+### Query Parameters
+
+<ParamField query="page" type="number" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="number" default="20">
+  Number of items per page
+</ParamField>
+
+<ParamField query="query" type="string">
+  Search filter to find specific bookmarks
+</ParamField>
+
+<ParamField query="types" type="string">
+  Filter by bookmark types (comma-separated MIME type IDs)
+</ParamField>
+
+<ParamField query="sort_by" type="string" default="size">
+  Field to sort by (e.g., `size`, `created_at`, `updated_at`)
+</ParamField>
+
+<ParamField query="sort_order" type="number" default="0">
+  Sort direction: `0` for descending, `1` for ascending
+</ParamField>
+
+### Response
+
+<ResponseField name="bookmarks" type="array" required>
+  Array of bookmark objects with storage information
+</ResponseField>
+
+<ResponseField name="pagination" type="object" required>
+  Pagination metadata
+  <Expandable>
+    <ResponseField name="page" type="number">
+      Current page number
+    </ResponseField>
+    <ResponseField name="limit" type="number">
+      Items per page
+    </ResponseField>
+    <ResponseField name="total" type="number">
+      Total number of items
+    </ResponseField>
+    <ResponseField name="pages" type="number">
+      Total number of pages
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Bookmark Storage Object
+
+Each bookmark in the response contains:
+
+<ResponseField name="public_id" type="string">
+  Unique bookmark identifier
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  Bookmark title
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Bookmark description
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Bookmark URL
+</ResponseField>
+
+<ResponseField name="collection_id" type="string">
+  ID of the collection containing this bookmark
+</ResponseField>
+
+<ResponseField name="collection_name" type="string">
+  Name of the collection
+</ResponseField>
+
+<ResponseField name="size" type="number">
+  Storage size in bytes used by this bookmark
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Bookmark status: `active`, `archived`, or `trashed`
+</ResponseField>
+
+<ResponseField name="thumbnail" type="string">
+  URL to bookmark thumbnail image
+</ResponseField>
+
+<ResponseField name="icon" type="string">
+  URL to bookmark favicon
+</ResponseField>
+
+<ResponseField name="mime_type_id" type="number">
+  MIME type identifier
+</ResponseField>
+
+<ResponseField name="user_id" type="string">
+  ID of the bookmark owner
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp of creation
+</ResponseField>
+
+<ResponseField name="updated_at" type="string">
+  ISO 8601 timestamp of last update
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "bookmarks": [
+    {
+      "public_id": "bkm_xyz789",
+      "title": "Large PDF Document",
+      "description": "Important research paper",
+      "url": "https://example.com/document.pdf",
+      "collection_id": "col_abc123",
+      "collection_name": "Research",
+      "size": 52428800,
+      "status": "active",
+      "thumbnail": "https://cdn.cultus.app/thumbnails/bkm_xyz789.jpg",
+      "icon": "https://example.com/favicon.ico",
+      "mime_type_id": 3,
+      "user_id": "usr_abc123def456",
+      "created_at": "2024-01-10T14:30:00Z",
+      "updated_at": "2024-01-10T14:30:00Z"
+    },
+    {
+      "public_id": "bkm_def456",
+      "title": "Video Tutorial",
+      "description": "How to use the API",
+      "url": "https://example.com/tutorial.mp4",
+      "collection_id": "col_abc123",
+      "collection_name": "Tutorials",
+      "size": 31457280,
+      "status": "active",
+      "thumbnail": "https://cdn.cultus.app/thumbnails/bkm_def456.jpg",
+      "icon": "https://example.com/favicon.ico",
+      "mime_type_id": 5,
+      "user_id": "usr_abc123def456",
+      "created_at": "2024-01-12T09:15:00Z",
+      "updated_at": "2024-01-12T09:15:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 47,
+    "pages": 3
+  }
+}
+```
+</ResponseExample>
+
+## Use Cases
+
+- Identify large bookmarks consuming storage space
+- Find and manage storage-heavy content
+- Clean up unnecessary large files to free up space
+- Monitor storage usage by bookmark type
+
+## Filtering
+
+Only bookmarks with `size > 0` are included in the detailed storage report. Empty or text-only bookmarks are excluded.

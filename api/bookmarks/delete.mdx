@@ -1,0 +1,130 @@
+---
+title: 'Delete Bookmark'
+api: 'DELETE /bookmarks/:id'
+---
+
+Permanently delete a bookmark and all associated data.
+
+## Delete Single Bookmark
+
+`DELETE /bookmarks/:id`
+
+Permanently delete a bookmark. This action cannot be undone.
+
+<ParamField path="id" type="string" required>
+  Bookmark ID (prefixed with `bm_`)
+</ParamField>
+
+<ResponseExample>
+```json
+{
+  "message": "bookmark deleted"
+}
+```
+</ResponseExample>
+
+<Warning>
+  Deleting a bookmark is permanent and cannot be undone. All associated data including archives, files, highlights, and comments will be deleted.
+</Warning>
+
+## What Gets Deleted
+
+When you delete a bookmark, the following data is removed:
+
+1. **Archive files** - If the bookmark has an archive, the file is deleted from storage
+2. **Uploaded files** - If the bookmark is a file upload, the file is deleted from storage
+3. **Cover images** - Custom cover images are removed from storage
+4. **Reader cache** - Cached reader mode content is cleared
+5. **Highlights** - All highlights on the bookmark are deleted
+6. **Comments** - All comments on the bookmark are deleted
+7. **Stars** - Star/like records are removed
+8. **Bookmark record** - The bookmark database entry is permanently deleted
+
+## Permissions
+
+To delete a bookmark, you must have:
+- **Admin** role on the bookmark (owner)
+- **Admin** role on the collection containing the bookmark
+
+**Viewer** role members cannot delete bookmarks.
+
+## Alternative: Trash Instead
+
+If you want to soft-delete a bookmark (move to trash) instead of permanently deleting it, use the update endpoint:
+
+```json
+PATCH /bookmarks/:id
+{
+  "status": "trashed"
+}
+```
+
+Trashed bookmarks can be:
+- Restored by setting `status` back to `active`
+- Listed by using `status=trashed` query parameter
+- Only visible to the owner (not collection members)
+
+## Events
+
+Deleting a bookmark triggers:
+- `bookmark.deleted` event to all collection members
+- Notification to collection members (if configured)
+- Sync updates for mobile/desktop clients
+
+## Storage Cleanup
+
+File deletions from storage happen asynchronously. If file deletion fails:
+- The bookmark is still deleted from the database
+- A warning is logged for manual cleanup
+- Storage quota is updated
+
+## Error Responses
+
+<ResponseField name="400" type="error">
+  Invalid bookmark ID format
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  You don't have permission to delete this bookmark
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Bookmark not found
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  Failed to delete bookmark (check logs for details)
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE \
+  https://api.cultus.app/v1/bookmarks/bm_abc123 \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.cultus.app/v1/bookmarks/bm_abc123', {
+  method: 'DELETE',
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN'
+  }
+});
+
+const result = await response.json();
+console.log(result.message); // "bookmark deleted"
+```
+
+```python Python
+import requests
+
+response = requests.delete(
+    'https://api.cultus.app/v1/bookmarks/bm_abc123',
+    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+
+print(response.json()['message'])  # "bookmark deleted"
+```
+</CodeGroup>

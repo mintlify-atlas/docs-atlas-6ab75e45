@@ -1,0 +1,292 @@
+---
+title: "Update Collection"
+api: "PATCH /collections/:id"
+description: "Update collection properties and settings"
+---
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  Collection ID (prefixed with `col_`)
+</ParamField>
+
+## Request Body
+
+<ParamField body="name" type="string">
+  New name for the collection
+</ParamField>
+
+<ParamField body="description" type="string">
+  New description for the collection (can be set to empty string to clear)
+</ParamField>
+
+<ParamField body="is_private" type="boolean">
+  Set collection visibility:
+  - `true`: Only owner and members can access
+  - `false`: Public collection visible to everyone
+</ParamField>
+
+<ParamField body="allow_public_join" type="boolean">
+  Allow users to join the collection without an invite:
+  - `true`: Users can join freely
+  - `false`: Invite required to join
+</ParamField>
+
+<ParamField body="icon" type="string">
+  URL or path to the collection icon
+</ParamField>
+
+<ParamField body="cover" type="string">
+  Cover image data or URL. Previous cover images are automatically removed.
+</ParamField>
+
+## Response
+
+<ResponseField name="collection" type="object">
+  The updated collection object
+  
+  <Expandable title="properties">
+    <ResponseField name="id" type="string">
+      Unique identifier for the collection
+    </ResponseField>
+    
+    <ResponseField name="user_id" type="string">
+      ID of the collection owner
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Collection name
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Collection description
+    </ResponseField>
+    
+    <ResponseField name="status" type="string">
+      Collection status (`active` or `inactive`)
+    </ResponseField>
+    
+    <ResponseField name="is_private" type="boolean">
+      Whether the collection is private
+    </ResponseField>
+    
+    <ResponseField name="allow_public_join" type="boolean">
+      Whether public users can join this collection
+    </ResponseField>
+    
+    <ResponseField name="thumbnail" type="string">
+      URL to collection cover image
+    </ResponseField>
+    
+    <ResponseField name="icon" type="string">
+      URL to collection icon
+    </ResponseField>
+    
+    <ResponseField name="views" type="integer">
+      Number of times the collection has been viewed
+    </ResponseField>
+    
+    <ResponseField name="parent_id" type="string">
+      Parent collection ID if nested
+    </ResponseField>
+    
+    <ResponseField name="updated_by_id" type="string">
+      ID of the user who last updated the collection
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      Timestamp when the collection was created
+    </ResponseField>
+    
+    <ResponseField name="updated_at" type="string">
+      Timestamp when the collection was last updated
+    </ResponseField>
+    
+    <ResponseField name="last_opened_at" type="string">
+      Timestamp when the collection was last opened
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="owner_id" type="string">
+  Public ID of the collection owner
+</ResponseField>
+
+<ResponseField name="owner_name" type="string">
+  Full name of the collection owner
+</ResponseField>
+
+<ResponseField name="owner_username" type="string">
+  Username of the collection owner
+</ResponseField>
+
+<ResponseField name="owner_avatar" type="string">
+  Avatar URL of the collection owner
+</ResponseField>
+
+<ResponseField name="bookmarks_count" type="integer">
+  Number of bookmarks in this collection
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  User's role in the collection (`admin` or `viewer`)
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.cultus.app/collections/col_xyz789 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Updated Reading List",
+    "description": "My curated articles",
+    "is_private": false,
+    "allow_public_join": true
+  }'
+```
+
+```json Make Collection Public
+{
+  "is_private": false,
+  "allow_public_join": true
+}
+```
+
+```json Update Name Only
+{
+  "name": "New Collection Name"
+}
+```
+
+```json Clear Description
+{
+  "description": ""
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json Success Response
+{
+  "collection": {
+    "id": "col_xyz789",
+    "user_id": "usr_abc123",
+    "name": "Updated Reading List",
+    "description": "My curated articles",
+    "status": "active",
+    "is_private": false,
+    "allow_public_join": true,
+    "thumbnail": "https://storage.cultus.app/covers/col_xyz789.jpg",
+    "icon": "https://assets.cultus.app/icons/folders/icons8-folder-500.png",
+    "views": 42,
+    "parent_id": null,
+    "updated_by_id": "usr_abc123",
+    "created_at": "2024-03-01T12:00:00Z",
+    "updated_at": "2024-03-04T15:30:00Z",
+    "last_opened_at": "2024-03-04T10:30:00Z"
+  },
+  "owner_id": "usr_abc123",
+  "owner_name": "John Doe",
+  "owner_username": "johndoe",
+  "owner_avatar": "https://avatars.cultus.app/usr_abc123",
+  "bookmarks_count": 15,
+  "role": "admin"
+}
+```
+
+```json Error Response (Not Found)
+{
+  "error": {
+    "message": "collection not found",
+    "status": 404
+  }
+}
+```
+</ResponseExample>
+
+## Move Collection
+
+<api>PATCH /collections/:id/move</api>
+
+Move a collection to a different parent or remove it from a parent.
+
+### Request Body
+
+<ParamField body="parent" type="string">
+  Parent collection ID to move the collection under
+</ParamField>
+
+<ParamField body="remove" type="boolean">
+  Set to `true` to remove the collection from its current parent (make it a top-level collection)
+</ParamField>
+
+### Restrictions
+
+- Collections with children cannot be moved
+- Collections can only be moved to top-level collections (not nested under sub-collections)
+- Only the collection owner can move collections
+- Maximum nesting depth is one level
+
+<RequestExample>
+```bash Move to Parent
+curl -X PATCH https://api.cultus.app/collections/col_xyz789/move \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parent": "col_abc123"
+  }'
+```
+
+```json Remove from Parent
+{
+  "remove": true
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json Success Response
+{
+  "collection": {
+    "id": "col_xyz789",
+    "user_id": "usr_abc123",
+    "name": "My Reading List",
+    "description": "Articles to read later",
+    "status": "active",
+    "is_private": true,
+    "allow_public_join": false,
+    "thumbnail": "",
+    "icon": "https://assets.cultus.app/icons/folders/icons8-folder-500.png",
+    "views": 42,
+    "parent_id": "col_abc123",
+    "updated_by_id": "usr_abc123",
+    "created_at": "2024-03-01T12:00:00Z",
+    "updated_at": "2024-03-04T15:30:00Z",
+    "last_opened_at": "2024-03-04T10:30:00Z"
+  },
+  "owner_id": "usr_abc123",
+  "owner_name": "John Doe",
+  "owner_username": "johndoe",
+  "owner_avatar": "https://avatars.cultus.app/usr_abc123",
+  "bookmarks_count": 15,
+  "role": "admin"
+}
+```
+
+```json Error Response (Has Children)
+{
+  "error": {
+    "message": "cannot move collection with children",
+    "status": 400
+  }
+}
+```
+</ResponseExample>
+
+## Notes
+
+- Only admins can update collection settings
+- Updating a collection emits a `collection.updated` event
+- Collection cache is automatically invalidated after updates
+- The `updated_by_id` field tracks who made the last change
+- Previous cover images are automatically deleted when uploading a new one

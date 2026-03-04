@@ -1,0 +1,719 @@
+---
+title: 'OAuth 2.0 Provider'
+description: 'Implement OAuth 2.0 authentication flows with Cultus as the authorization provider'
+---
+
+## Overview
+
+Cultus acts as an OAuth 2.0 authorization provider, allowing third-party applications to access user data with explicit permission. This enables secure integrations without sharing user credentials.
+
+## OAuth 2.0 Flow
+
+Cultus implements the Authorization Code flow with the following steps:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant App
+    participant Cultus
+    
+    User->>App: Initiate OAuth
+    App->>Cultus: Authorization request
+    Note over App,Cultus: GET /v1/oauth?client_id=...&redirect_uri=...
+    Cultus->>User: Show authorization page
+    User->>Cultus: Grant/Deny access
+    Cultus->>App: Redirect with tokens
+    Note over Cultus,App: redirect_uri?access_token=...&refresh_token=...
+    App->>Cultus: API requests with access token
+    Cultus-->>App: Protected resources
+```
+
+## Creating an OAuth App
+
+Before integrating OAuth, you need to create a custom app in Cultus.
+
+### App Registration
+
+A custom app (`custom_apps` table) contains:
+
+```json
+{
+  "id": "app_abc123xyz",
+  "user_id": "usr_owner123",
+  "name": "My Integration",
+  "description": "Third-party app integration",
+  "website": "https://example.com",
+  "image": "https://example.com/logo.png",
+  "redirect_uri": "https://example.com/oauth/callback",
+  "secret": "hashed_secret",
+  "status": "active",
+  "scopes": "bookmarks:read,bookmarks:write,collections:read",
+  "created_at": "2024-03-15T10:30:00Z",
+  "last_used_at": "2024-03-20T15:45:00Z"
+}
+```
+
+### App Status
+
+- **`active`** - App can request authorization
+- **`inactive`** - App temporarily disabled
+- **`suspended`** - App permanently disabled (violations)
+
+<Warning>
+  Apps with status other than `active` will be rejected during authorization.
+</Warning>
+
+## Authorization Flow
+
+### Step 1: Redirect User to Authorization Page
+
+Direct the user to Cultus authorization endpoint:
+
+```
+GET /v1/oauth
+```
+
+#### Query Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `client_id` | Yes | Your app's public ID (e.g., `app_abc123xyz`) |
+| `redirect_uri` | Yes | Callback URL registered with your app |
+| `state` | Recommended | Random string to prevent CSRF attacks |
+
+#### Example URL
+
+```
+https://api.linkvite.io/v1/oauth?client_id=app_abc123xyz&redirect_uri=https://example.com/callback&state=random_string_xyz
+```
+
+### Step 2: User Authorizes App
+
+Cultus presents an authorization page showing:
+
+- App name and logo
+- Requested scopes (permissions)
+- User account being authorized
+- Grant/Deny buttons
+
+The authorization page displays scope descriptions like:
+
+- "View bookmarks"
+- "Create and Edit bookmarks"
+- "Delete bookmarks"
+- "View collections"
+
+### Step 3: Handle Authorization Response
+
+After the user grants or denies access, Cultus redirects to your `redirect_uri`.
+
+#### Success Response
+
+```
+https://example.com/callback?access_token=eyJhbGc...&refresh_token=eyJhbGc...&access_token_expires_in=1800&refresh_token_expires_in=2592000&token_type=bearer&state=random_string_xyz
+```
+
+#### Success Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `access_token` | JWT access token for API requests |
+| `refresh_token` | JWT refresh token for obtaining new access tokens |
+| `access_token_expires_in` | Access token lifetime in seconds (1800 = 30 min) |
+| `refresh_token_expires_in` | Refresh token lifetime in seconds (2592000 = 30 days) |
+| `token_type` | Always `bearer` |
+| `state` | Your original state parameter |
+
+#### Error Response
+
+```
+https://example.com/callback?error=access_denied&error_description=Access+denied+by+user
+```
+
+#### Error Codes
+
+| Error | Description |
+|-------|-------------|
+| `access_denied` | User denied authorization |
+| `invalid_app` | App is inactive or suspended |
+| `invalid_client_id` | Client ID not found or invalid |
+| `invalid_redirect_uri` | Redirect URI doesn't match registered URI |
+| `invalid_state` | State parameter invalid or expired |
+| `internal_error` | Server error during authorization |
+
+### Example Implementation
+
+<CodeGroup>
+
+```javascript JavaScript
+// Step 1: Initiate OAuth flow
+function initiateOAuth() {
+  const clientId = 'app_abc123xyz';
+  const redirectUri = 'https://example.com/callback';
+  const state = generateRandomString(); // Store this in session
+  
+  const authUrl = `https://api.linkvite.io/v1/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+  
+  window.location.href = authUrl;
+}
+
+// Step 2: Handle callback
+function handleCallback() {
+  const params = new URLSearchParams(window.location.search);
+  
+  if (params.has('error')) {
+    console.error('OAuth error:', params.get('error_description'));
+    return;
+  }
+  
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  const state = params.get('state');
+  
+  // Verify state matches
+  if (state !== storedState) {
+    console.error('State mismatch - possible CSRF attack');
+    return;
+  }
+  
+  // Store tokens securely
+  localStorage.setItem('oauth_access_token', accessToken);
+  localStorage.setItem('oauth_refresh_token', refreshToken);
+  
+  // Make authenticated requests
+  fetchUserBookmarks(accessToken);
+}
+
+function generateRandomString() {
+  return Math.random().toString(36).substring(2, 15);
+}
+```
+
+```python Python
+import secrets
+from flask import Flask, redirect, request, session
+import requests
+
+app = Flask(__name__)
+app.secret_key = 'your-secret-key'
+
+CLIENT_ID = 'app_abc123xyz'
+REDIRECT_URI = 'https://example.com/callback'
+
+@app.route('/oauth/login')
+def oauth_login():
+    # Generate and store state
+    state = secrets.token_urlsafe(32)
+    session['oauth_state'] = state
+    
+    # Redirect to Cultus OAuth
+    auth_url = f'https://api.linkvite.io/v1/oauth?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&state={state}'
+    return redirect(auth_url)
+
+@app.route('/callback')
+def oauth_callback():
+    # Check for errors
+    if 'error' in request.args:
+        return f"Error: {request.args.get('error_description')}", 400
+    
+    # Verify state
+    state = request.args.get('state')
+    if state != session.get('oauth_state'):
+        return 'Invalid state parameter', 400
+    
+    # Get tokens
+    access_token = request.args.get('access_token')
+    refresh_token = request.args.get('refresh_token')
+    
+    # Store tokens (use secure session or database)
+    session['access_token'] = access_token
+    session['refresh_token'] = refresh_token
+    
+    return redirect('/dashboard')
+
+if __name__ == '__main__':
+    app.run()
+```
+
+```go Go
+package main
+
+import (
+    "crypto/rand"
+    "encoding/base64"
+    "fmt"
+    "net/http"
+    "net/url"
+)
+
+const (
+    ClientID    = "app_abc123xyz"
+    RedirectURI = "https://example.com/callback"
+)
+
+func initiateOAuth(w http.ResponseWriter, r *http.Request) {
+    // Generate state
+    state := generateState()
+    // Store state in session
+    
+    authURL := fmt.Sprintf(
+        "https://api.linkvite.io/v1/oauth?client_id=%s&redirect_uri=%s&state=%s",
+        ClientID,
+        url.QueryEscape(RedirectURI),
+        state,
+    )
+    
+    http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+func handleCallback(w http.ResponseWriter, r *http.Request) {
+    // Check for errors
+    if errCode := r.URL.Query().Get("error"); errCode != "" {
+        http.Error(w, r.URL.Query().Get("error_description"), http.StatusBadRequest)
+        return
+    }
+    
+    // Verify state
+    state := r.URL.Query().Get("state")
+    // Verify state matches stored value
+    
+    // Get tokens
+    accessToken := r.URL.Query().Get("access_token")
+    refreshToken := r.URL.Query().Get("refresh_token")
+    
+    // Store tokens securely
+    // ...
+}
+
+func generateState() string {
+    b := make([]byte, 32)
+    rand.Read(b)
+    return base64.URLEncoding.EncodeToString(b)
+}
+```
+
+</CodeGroup>
+
+## Using OAuth Tokens
+
+OAuth access tokens are JWT tokens with specific scopes.
+
+### Token Claims
+
+```json
+{
+  "sub": "usr_abc123xyz",
+  "iss": "linkvite",
+  "aud": ["linkvite"],
+  "jti": "550e8400-e29b-41d4-a716",
+  "iat": 1678901234,
+  "exp": 1678903034,
+  "auth_type": "oauth",
+  "token_type": "access",
+  "scopes": "bookmarks:read,bookmarks:write,collections:read"
+}
+```
+
+Note the `auth_type` is `"oauth"` and `scopes` contains the authorized permissions.
+
+### Making API Requests
+
+Include the OAuth access token in the `Authorization` header:
+
+```http
+GET /v1/bookmarks HTTP/1.1
+Host: api.linkvite.io
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+```
+
+### Example
+
+<CodeGroup>
+
+```javascript JavaScript
+async function fetchUserBookmarks(accessToken) {
+  const response = await fetch('https://api.linkvite.io/v1/bookmarks', {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  const data = await response.json();
+  return data;
+}
+```
+
+```python Python
+import requests
+
+def fetch_user_bookmarks(access_token):
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = requests.get(
+        'https://api.linkvite.io/v1/bookmarks',
+        headers=headers
+    )
+    
+    return response.json()
+```
+
+```curl cURL
+curl -X GET https://api.linkvite.io/v1/bookmarks \
+  -H "Authorization: Bearer eyJhbGc..." \
+  -H "Content-Type: application/json"
+```
+
+</CodeGroup>
+
+## Refreshing OAuth Tokens
+
+OAuth access tokens expire after 30 minutes. Use the refresh token to obtain new tokens.
+
+### Endpoint
+
+```
+POST /v1/oauth/refresh
+```
+
+### Request Body
+
+```json
+{
+  "app_id": "app_abc123xyz",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "token_type": "bearer",
+    "access_token": "eyJhbGc...",
+    "refresh_token": "eyJhbGc...",
+    "access_token_expires_in": 1800,
+    "refresh_token_expires_in": 2592000
+  }
+}
+```
+
+### Example
+
+<CodeGroup>
+
+```javascript JavaScript
+async function refreshOAuthToken(appId, refreshToken) {
+  const response = await fetch('https://api.linkvite.io/v1/oauth/refresh', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      app_id: appId,
+      refresh_token: refreshToken
+    })
+  });
+  
+  const data = await response.json();
+  if (data.success) {
+    const { access_token, refresh_token } = data.data;
+    // Store new tokens
+    return { access_token, refresh_token };
+  }
+  
+  throw new Error('Failed to refresh token');
+}
+```
+
+```python Python
+import requests
+
+def refresh_oauth_token(app_id: str, refresh_token: str):
+    response = requests.post(
+        'https://api.linkvite.io/v1/oauth/refresh',
+        json={
+            'app_id': app_id,
+            'refresh_token': refresh_token
+        }
+    )
+    
+    data = response.json()
+    if data.get('success'):
+        return data['data']
+    
+    raise Exception('Failed to refresh token')
+```
+
+</CodeGroup>
+
+## OAuth Scopes
+
+Scopes define what permissions an app requests. They follow the format `resource:action`.
+
+### Available Scopes
+
+#### User Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `user:read` | View user profile information |
+| `user:edit` | Update user profile |
+| `user:trash:delete` | Delete items from trash |
+| `user:storage:read` | View storage usage |
+
+#### Bookmark Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `bookmarks:read` | View bookmarks |
+| `bookmarks:write` | Create bookmarks |
+| `bookmarks:edit` | Update bookmarks |
+| `bookmarks:delete` | Delete bookmarks |
+
+#### Collection Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `collections:read` | View collections |
+| `collections:write` | Create collections |
+| `collections:edit` | Update collections |
+| `collections:delete` | Delete collections |
+
+#### Comment Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `comments:read` | View comments |
+| `comments:write` | Create comments |
+| `comments:delete` | Delete comments |
+
+#### Highlight Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `highlights:read` | View highlights |
+| `highlights:write` | Create highlights |
+| `highlights:edit` | Update highlights |
+| `highlights:delete` | Delete highlights |
+
+#### Reminder Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `reminders:read` | View reminders |
+| `reminders:write` | Create reminders |
+| `reminders:edit` | Update reminders |
+| `reminders:delete` | Delete reminders |
+
+#### Other Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `apps:read` | View authorized apps |
+| `plans:read` | View subscription plans |
+| `files:read` | View uploaded files |
+| `search:read` | Search bookmarks and collections |
+| `explore:read` | View explore content |
+| `invites:read` | View invites |
+| `invites:edit` | Manage invites |
+| `invite-links:edit` | Manage invite links |
+| `invite-links:write` | Create invite links |
+| `invite-links:delete` | Delete invite links |
+| `api-keys:read` | View API keys |
+| `api-keys:write` | Create API keys |
+| `api-keys:edit` | Update API keys |
+| `rss-feeds:read` | View RSS feeds |
+| `rss-feeds:write` | Create RSS feeds |
+| `rss-feeds:edit` | Update RSS feeds |
+| `rss-feeds:delete` | Delete RSS feeds |
+
+### Scope Format
+
+Scopes are stored as comma-separated strings:
+
+```
+bookmarks:read,bookmarks:write,collections:read
+```
+
+### Requesting Scopes
+
+Scopes are defined when creating the OAuth app. Users see a human-readable description during authorization:
+
+```
+This app would like to:
+• View bookmarks
+• Create bookmarks
+• View collections
+```
+
+<Warning>
+  Request only the minimum scopes needed for your app's functionality. Users are more likely to authorize apps that request fewer permissions.
+</Warning>
+
+## OAuth Sessions
+
+When a user authorizes an app, an OAuth session is created:
+
+```json
+{
+  "id": 123,
+  "user_id": 456,
+  "app_id": 789,
+  "created_at": "2024-03-15T10:30:00Z",
+  "last_used_at": "2024-03-20T15:45:00Z"
+}
+```
+
+### Session Management
+
+- Sessions are automatically created on first authorization
+- Subsequent authorizations reuse existing sessions
+- No need to re-authorize if session exists and app scopes haven't changed
+- Users can revoke sessions from their account settings
+
+## Revoking Authorization
+
+Users can revoke OAuth access to your app from their account settings. When revoked:
+
+- The OAuth session is deleted
+- All issued tokens become invalid
+- Future API requests return 401 Unauthorized
+- App must request authorization again
+
+## Security Best Practices
+
+### State Parameter
+
+<Warning>
+  Always use the `state` parameter to prevent CSRF attacks.
+</Warning>
+
+1. Generate a random, unpredictable state value
+2. Store it in session before redirecting
+3. Verify it matches when receiving callback
+4. Reject authorization if state doesn't match
+
+### Redirect URI Validation
+
+- Cultus strictly validates redirect URIs
+- Must exactly match the URI registered with your app
+- No partial matches or wildcards
+- Use HTTPS for production redirect URIs
+
+### Token Storage
+
+- Store tokens securely on your server
+- Never expose tokens in client-side code
+- Use environment variables for sensitive data
+- Rotate tokens regularly
+
+### HTTPS Only
+
+- Use HTTPS for all OAuth flows
+- Never use OAuth over HTTP in production
+- Redirect URIs must use HTTPS
+
+## Testing OAuth Flow
+
+### Development Setup
+
+1. Create a test app in Cultus
+2. Set redirect URI to `http://localhost:3000/callback` for local testing
+3. Note your app's `client_id`
+4. Implement authorization flow
+5. Test with a test user account
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Invalid redirect URI | Ensure redirect URI exactly matches registered URI |
+| Invalid client ID | Verify app ID is correct and app is active |
+| State mismatch | Check state parameter generation and validation |
+| Token expired | Implement token refresh logic |
+| Insufficient permissions | Verify requested scopes match app configuration |
+
+## Example: Complete OAuth Integration
+
+<CodeGroup>
+
+```javascript JavaScript (Express)
+const express = require('express');
+const session = require('express-session');
+const crypto = require('crypto');
+const axios = require('axios');
+
+const app = express();
+
+app.use(session({
+  secret: 'your-secret-key',
+  resave: false,
+  saveUninitialized: true
+}));
+
+const CLIENT_ID = 'app_abc123xyz';
+const REDIRECT_URI = 'http://localhost:3000/callback';
+
+// Initiate OAuth
+app.get('/oauth/login', (req, res) => {
+  const state = crypto.randomBytes(32).toString('hex');
+  req.session.oauthState = state;
+  
+  const authUrl = `https://api.linkvite.io/v1/oauth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&state=${state}`;
+  res.redirect(authUrl);
+});
+
+// Handle callback
+app.get('/callback', async (req, res) => {
+  const { access_token, refresh_token, state, error } = req.query;
+  
+  if (error) {
+    return res.status(400).send(`OAuth error: ${req.query.error_description}`);
+  }
+  
+  if (state !== req.session.oauthState) {
+    return res.status(400).send('Invalid state parameter');
+  }
+  
+  // Store tokens
+  req.session.accessToken = access_token;
+  req.session.refreshToken = refresh_token;
+  
+  // Fetch user bookmarks
+  try {
+    const response = await axios.get('https://api.linkvite.io/v1/bookmarks', {
+      headers: {
+        'Authorization': `Bearer ${access_token}`
+      }
+    });
+    
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).send('Error fetching bookmarks');
+  }
+});
+
+app.listen(3000, () => {
+  console.log('OAuth app running on http://localhost:3000');
+});
+```
+
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="JWT Tokens" icon="key" href="/auth/jwt-tokens">
+    Learn about JWT token structure and validation
+  </Card>
+  <Card title="API Keys" icon="code" href="/auth/api-keys">
+    Use API keys for server-to-server authentication
+  </Card>
+</CardGroup>

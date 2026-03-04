@@ -1,0 +1,348 @@
+---
+title: "Collection Members"
+description: "Manage collection members, invites, and permissions"
+---
+
+## Get Collection Members
+
+<api>GET /collections/:id/members</api>
+
+Retrieve all members of a collection including their roles.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Collection ID (prefixed with `col_`)
+</ParamField>
+
+### Response
+
+<ResponseField name="role" type="string">
+  The authenticated user's role in this collection (`admin` or `viewer`)
+</ResponseField>
+
+<ResponseField name="owner_id" type="string">
+  Public ID of the collection owner
+</ResponseField>
+
+<ResponseField name="members" type="array">
+  Array of member objects
+  
+  <Expandable title="member properties">
+    <ResponseField name="id" type="string">
+      User's public ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      User's full name
+    </ResponseField>
+    
+    <ResponseField name="username" type="string">
+      User's username
+    </ResponseField>
+    
+    <ResponseField name="avatar" type="string">
+      URL to user's avatar image
+    </ResponseField>
+    
+    <ResponseField name="role" type="string">
+      User's role in the collection (`admin` or `viewer`)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://api.cultus.app/collections/col_xyz789/members \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Success Response
+{
+  "role": "admin",
+  "owner_id": "usr_abc123",
+  "members": [
+    {
+      "id": "usr_abc123",
+      "name": "John Doe",
+      "username": "johndoe",
+      "avatar": "https://avatars.cultus.app/usr_abc123",
+      "role": "admin"
+    },
+    {
+      "id": "usr_def456",
+      "name": "Jane Smith",
+      "username": "janesmith",
+      "avatar": "https://avatars.cultus.app/usr_def456",
+      "role": "viewer"
+    },
+    {
+      "id": "usr_ghi789",
+      "name": "Bob Wilson",
+      "username": "bobwilson",
+      "avatar": "https://avatars.cultus.app/usr_ghi789",
+      "role": "viewer"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Invite User to Collection
+
+<api>POST /collections/:id/invite</api>
+
+Invite a user to join a collection with a specific role.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Collection ID (prefixed with `col_`)
+</ParamField>
+
+### Request Body
+
+<ParamField body="identifier" type="string" required>
+  User identifier (username, email, or user ID)
+</ParamField>
+
+<ParamField body="role" type="string" required>
+  Role to assign to the invited user:
+  - `admin`: Full control over collection settings and members
+  - `viewer`: Can view and add bookmarks but cannot modify collection settings
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Confirmation message: "user invited successfully"
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.cultus.app/collections/col_xyz789/invite \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identifier": "janesmith",
+    "role": "viewer"
+  }'
+```
+
+```json Invite as Admin
+{
+  "identifier": "johndoe@example.com",
+  "role": "admin"
+}
+```
+
+```json Invite as Viewer
+{
+  "identifier": "usr_abc123",
+  "role": "viewer"
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json Success Response
+{
+  "message": "user invited successfully"
+}
+```
+
+```json Error Response (Self-Invite)
+{
+  "error": {
+    "message": "you can't invite yourself to a collection",
+    "status": 400
+  }
+}
+```
+
+```json Error Response (User Not Found)
+{
+  "error": {
+    "message": "user not found",
+    "status": 404
+  }
+}
+```
+</ResponseExample>
+
+## Update Collection Member
+
+<api>PATCH /collections/:id/members</api>
+
+Update a member's role or remove them from the collection.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Collection ID (prefixed with `col_`)
+</ParamField>
+
+### Request Body
+
+<ParamField body="user_id" type="string" required>
+  Public ID of the user to update
+</ParamField>
+
+<ParamField body="role" type="string">
+  New role for the member (`admin` or `viewer`). Required if `remove` is not `true`.
+</ParamField>
+
+<ParamField body="remove" type="boolean">
+  Set to `true` to remove the member from the collection
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Confirmation message: "collection member updated"
+</ResponseField>
+
+<RequestExample>
+```bash Change Member Role
+curl -X PATCH https://api.cultus.app/collections/col_xyz789/members \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "usr_def456",
+    "role": "admin"
+  }'
+```
+
+```json Remove Member
+{
+  "user_id": "usr_def456",
+  "remove": true
+}
+```
+
+```json Demote Admin to Viewer
+{
+  "user_id": "usr_ghi789",
+  "role": "viewer"
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json Success Response
+{
+  "message": "collection member updated"
+}
+```
+
+```json Error Response (Missing Role)
+{
+  "error": {
+    "message": "role is required",
+    "status": 400
+  }
+}
+```
+</ResponseExample>
+
+## Get Collection Presence
+
+<api>GET /collections/:id/presence</api>
+
+Get real-time presence information for a collection (online members).
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Collection ID (prefixed with `col_`)
+</ParamField>
+
+### Response
+
+<ResponseField name="total_members" type="integer">
+  Total number of members in the collection
+</ResponseField>
+
+<ResponseField name="online_members" type="integer">
+  Number of unique members currently online
+</ResponseField>
+
+<ResponseField name="online_clients" type="integer">
+  Number of active client connections (one user may have multiple clients)
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl https://api.cultus.app/collections/col_xyz789/presence \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</RequestExample>
+
+<ResponseExample>
+```json Success Response
+{
+  "total_members": 12,
+  "online_members": 3,
+  "online_clients": 5
+}
+```
+</ResponseExample>
+
+## Member Roles
+
+### Admin Role
+
+Admins have full control over the collection:
+
+- Update collection settings (name, description, visibility)
+- Invite and remove members
+- Change member roles
+- Add and delete bookmarks
+- Delete the collection
+- Move the collection
+
+### Viewer Role
+
+Viewers have limited access:
+
+- View collection and bookmarks
+- Add new bookmarks to the collection
+- Leave the collection
+- Cannot modify collection settings
+- Cannot manage members
+- Cannot delete the collection
+
+### Owner
+
+The collection owner (creator) always has admin-level access and:
+
+- Cannot be removed from the collection
+- Always appears first in the members list
+- Is the only one who can delete the collection
+- Can move the collection to different parents
+
+## Notes
+
+### Invites
+
+- Invited users receive a notification
+- Invites must be accepted before the user becomes a member
+- Only admins can send invites
+- You cannot invite yourself to a collection
+- Duplicate invites to existing members are prevented by validation
+
+### Member Management
+
+- Only admins can update member roles
+- Only admins can remove members
+- Members are listed with the owner first
+- Removing a member emits a `collection.left` event to their channel
+- Members can leave collections using the `/leave` endpoint
+
+### Real-time Updates
+
+- Member changes trigger socket events
+- Presence information is updated in real-time
+- Use presence data to show who's actively viewing the collection

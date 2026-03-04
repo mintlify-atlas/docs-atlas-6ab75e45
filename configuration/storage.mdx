@@ -1,0 +1,428 @@
+---
+title: Storage Configuration
+description: AWS S3 storage setup, file uploads, and bucket structure for Cultus API
+---
+
+Cultus uses S3-compatible object storage for user uploads, bookmarks, avatars, and other media files.
+
+## S3 Configuration
+
+### Environment Variables
+
+The following environment variables configure S3 storage:
+
+<ParamField path="AWS_REGION" type="string" required>
+  AWS region (e.g., `us-east-1`, `eu-west-1`)
+</ParamField>
+
+<ParamField path="AWS_ENDPOINT" type="string" required>
+  S3-compatible endpoint URL. Supports:
+  - AWS S3: `https://s3.amazonaws.com`
+  - Wasabi: `https://s3.wasabisys.com`
+  - DigitalOcean Spaces: `https://nyc3.digitaloceanspaces.com`
+  - MinIO: `http://localhost:9000`
+</ParamField>
+
+<ParamField path="AWS_ACCESS_KEY" type="string" required>
+  S3 access key ID
+</ParamField>
+
+<ParamField path="AWS_SECRET_KEY" type="string" required>
+  S3 secret access key
+</ParamField>
+
+<ParamField path="AWS_BUCKET_NAME" type="string" required>
+  Bucket name for storing all files
+</ParamField>
+
+### Initialization
+
+Storage is initialized in `internal/storage/storage.go:21-57` with the following configuration:
+
+```go
+config := aws.Config{
+    S3ForcePathStyle: aws.Bool(true),
+    Region:           aws.String(region),
+    Endpoint:         aws.String(endpoint),
+    Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
+}
+```
+
+<Note>
+  `S3ForcePathStyle: true` is required for non-AWS S3-compatible services like Wasabi and MinIO.
+</Note>
+
+## Bucket Structure
+
+Files are organized in the bucket using the following key patterns (defined in `pkg/config/config.go:148-154`):
+
+```
+bucket-name/
+├── avatars/
+│   └── {user_id}.jpg
+├── bookmarks/
+│   └── {bookmark_id}.pdf
+├── bookmark-covers/
+│   └── {bookmark_id}.jpg
+├── collection-covers/
+│   └── {collection_id}.png
+├── custom-apps/
+│   └── {app_id}.png
+├── archives/
+│   └── {bookmark_id}.html
+└── temp/
+    └── {random_id}.tmp
+```
+
+### File Key Patterns
+
+```go
+FileKeyAvatar          = "avatars/%s"
+FileKeyBookmark        = "bookmarks/%s"
+FileKeyBookmarkCover   = "bookmark-covers/%s"
+FileKeyCollectionCover = "collection-covers/%s"
+FileKeyCustomAppImage  = "custom-apps/%s"
+FileKeyArchive         = "archives/%s"
+FileKeyTemporary       = "temp/%s"
+```
+
+## File Upload Limits
+
+File size limits are configured in `pkg/config/config.go:159-161`:
+
+| File Type | Size Limit | Config Variable |
+|-----------|------------|----------------|
+| Item/Bookmark Images | 5 MB | `ItemImageSizeLimit` |
+| Bookmark Uploads | 100 MB | `BookmarkSizeLimit` |
+| Import Files | 50 MB | `ImportFileSizeLimit` |
+
+```go
+ItemImageSizeLimit    = 5 * 1024 * 1024    // 5 MB
+BookmarkSizeLimit     = 100 * 1024 * 1024  // 100 MB
+ImportFileSizeLimit   = 50 * 1024 * 1024   // 50 MB
+```
+
+## Storage Quotas
+
+User storage quotas based on account type:
+
+| Account Type | Storage Quota | Config Variable |
+|--------------|---------------|----------------|
+| Free | 200 MB | `FreeUserStorageLimit` |
+| Pro | 1 GB | `ProUserStorageLimit` |
+
+```go
+FreeUserStorageLimit = 200 * 1024 * 1024        // 200 MB
+ProUserStorageLimit  = 1024 * 1024 * 1024       // 1 GB
+```
+
+Storage usage is tracked in Redis cache:
+```go
+KEY_USER_STORAGE_USAGE = "storage_usage:%s"
+DURATION_USER_STORAGE_USAGE = 45 * time.Second
+```
+
+## Storage Operations
+
+### Upload File
+
+Defined in `internal/storage/helpers.go:58-73`
+
+```go
+func (s *Storage) S3PutObject(key string, body []byte, contentType string) error
+```
+
+**Parameters:**
+- `key` - S3 object key (e.g., `avatars/user123.jpg`)
+- `body` - File content as byte array
+- `contentType` - MIME type (e.g., `image/jpeg`)
+
+**Example:**
+```go
+err := storage.S3PutObject("avatars/user123.jpg", fileBytes, "image/jpeg")
+```
+
+### Upload Public File
+
+Defined in `internal/storage/helpers.go:75-92`
+
+```go
+func (s *Storage) S3PPutPublicObject(key string, body []byte, contentType string) error
+```
+
+Sets ACL to `public-read` for publicly accessible files.
+
+### Download File
+
+Defined in `internal/storage/helpers.go:20-42`
+
+```go
+func (s *Storage) S3GetObject(key string) ([]byte, error)
+```
+
+**Returns:** File content as byte array
+
+### Delete File
+
+Defined in `internal/storage/helpers.go:44-56`
+
+```go
+func (s *Storage) S3DeleteObject(key string) error
+```
+
+### Check File Exists
+
+Defined in `internal/storage/helpers.go:94-102`
+
+```go
+func (s *Storage) S3ObjectExists(key string) bool
+```
+
+### Generate Signed URL
+
+Defined in `internal/storage/helpers.go:104-117`
+
+```go
+func (s *Storage) S3GetSignedURL(key string, expire int64) (string, error)
+```
+
+**Parameters:**
+- `key` - S3 object key
+- `expire` - Expiration time in minutes
+
+**Returns:** Pre-signed URL valid for the specified duration
+
+**Example:**
+```go
+url, err := storage.S3GetSignedURL("bookmarks/doc.pdf", 15)  // 15 minutes
+```
+
+### Get Public URL
+
+Defined in `internal/storage/helpers.go:153-156`
+
+```go
+func (s *Storage) GetS3URL(key string) string
+```
+
+Generates a public URL with cache-busting query parameter:
+```
+https://bucket-name/key?random-id
+```
+
+## Bucket Policy
+
+### Public Read Access
+
+The bucket policy is automatically configured on startup (`internal/storage/helpers.go:119-151`):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowPublicReadObject",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::bucket-name/*"],
+      "Condition": {
+        "StringLike": {
+          "s3:x-amz-acl": ["public-read"]
+        }
+      }
+    }
+  ]
+}
+```
+
+This policy allows public access only to objects explicitly uploaded with `public-read` ACL.
+
+## File Upload Flow
+
+### 1. Bookmark File Upload
+
+When a user uploads a bookmark file, the flow is:
+
+<Steps>
+  <Step title="Upload to S3">
+    File is uploaded to `bookmarks/{bookmark_id}.{ext}` using `S3PutObject()`
+  </Step>
+  
+  <Step title="Queue Processing">
+    Event `EventTypeFileBookmarkUploaded` is published to NATS queue
+    
+    ```go
+    Event: types.EventTypeFileBookmarkUploaded
+    ```
+  </Step>
+  
+  <Step title="Background Processing">
+    Queue handler processes the file:
+    - Validates file type and size
+    - Extracts metadata (title, description)
+    - Generates thumbnail if image/video
+    - Updates bookmark record in database
+    
+    See `internal/queue/bookmark.go:227`
+  </Step>
+</Steps>
+
+### 2. Avatar Upload
+
+Avatars are uploaded to `avatars/{user_id}.jpg` and marked as public:
+
+```go
+err := storage.S3PPutPublicObject(
+    fmt.Sprintf("avatars/%s", userID),
+    avatarBytes,
+    "image/jpeg",
+)
+```
+
+### 3. Collection Cover Upload
+
+Collection covers support both uploaded images and Unsplash integration:
+
+```go
+key := fmt.Sprintf("collection-covers/%s.jpg", collectionID)
+err := storage.S3PPutPublicObject(key, imageBytes, "image/jpeg")
+```
+
+## Storage URLs
+
+The application uses the following URL patterns:
+
+### Assets URL
+
+Static assets (default covers, icons): `https://assets.linkvite.io`
+
+```go
+AssetsURL = "https://assets.linkvite.io"
+DefaultCoverURL = fmt.Sprintf("%s/covers/default.png", AssetsURL)
+```
+
+### Storage URL
+
+User uploads and dynamic content: `https://storage.linkvite.io`
+
+```go
+StorageURL = "https://storage.linkvite.io"
+```
+
+### CDN Configuration
+
+For production, configure CloudFront or CloudFlare in front of S3:
+
+1. Create CDN distribution pointing to S3 bucket
+2. Set `StorageURL` to CDN domain
+3. Configure cache headers for static content
+4. Enable compression for text files
+
+## Supported File Types
+
+Based on MIME types table (`sql/0004_bookmarks.sql:29-30`):
+
+### Documents
+- PDF (`application/pdf`)
+- ZIP (`application/zip`)
+- DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`)
+- PPTX (`application/vnd.openxmlformats-officedocument.presentationml.presentation`)
+- XLSX (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`)
+
+### Images
+- JPG/JPEG (`image/jpeg`)
+- PNG (`image/png`)
+- GIF (`image/gif`)
+- WebP (`image/webp`)
+- SVG (`image/svg+xml`)
+- BMP (`image/bmp`)
+
+### Audio
+- MP3 (`audio/mpeg`)
+- WAV (`audio/wav`)
+- OGG (`audio/ogg`)
+- M4A (`audio/x-m4a`)
+- MP4 Audio (`audio/mp4`)
+
+### Video
+- MP4 (`video/mp4`)
+- WebM (`video/webm`)
+
+### Web
+- HTML (`text/html`)
+- Plain Text (`text/plain`)
+
+## Health Check
+
+Storage health is checked via S3 HeadBucket operation:
+
+```go
+func (s *Storage) HealthCheck(ctx context.Context) error {
+    _, err := s.client.HeadBucketWithContext(ctx, &s3.HeadBucketInput{
+        Bucket: aws.String(s.name),
+    })
+    return err
+}
+```
+
+Accessed at: `GET /api/health` endpoint
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use CDN" icon="gauge-high">
+    Configure CloudFront/CloudFlare for faster delivery and reduced S3 costs
+  </Card>
+  
+  <Card title="Lifecycle Policies" icon="trash">
+    Set up S3 lifecycle rules to delete temp files after 7 days
+  </Card>
+  
+  <Card title="Backup Strategy" icon="shield">
+    Enable S3 versioning and cross-region replication for critical data
+  </Card>
+  
+  <Card title="Monitor Costs" icon="dollar-sign">
+    Track storage usage per user and set up CloudWatch alarms
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Connection Errors
+
+If storage initialization fails:
+
+1. Verify `AWS_ENDPOINT` is correct for your provider
+2. Check `AWS_ACCESS_KEY` and `AWS_SECRET_KEY` are valid
+3. Ensure bucket exists and is accessible
+4. For MinIO/local, verify `S3ForcePathStyle: true`
+
+### Upload Failures
+
+1. Check file size against limits
+2. Verify MIME type is supported
+3. Ensure user hasn't exceeded storage quota
+4. Check S3 bucket permissions
+
+### CORS Issues
+
+Configure bucket CORS policy for web uploads:
+
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "PUT", "POST", "DELETE"],
+    "AllowedOrigins": ["https://app.linkvite.io"],
+    "ExposeHeaders": ["ETag"]
+  }
+]
+```
+
+## Related Documentation
+
+- [Environment Variables](/configuration/environment) - S3 configuration variables
+- [Database Configuration](/configuration/database) - File metadata storage
+- [Queue Configuration](/configuration/queue) - Async file processing

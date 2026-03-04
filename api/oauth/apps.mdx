@@ -1,0 +1,131 @@
+---
+title: "OAuth App Management"
+description: "Create and manage custom OAuth applications"
+---
+
+## Overview
+
+Cultus allows you to create custom OAuth applications to access the API on behalf of users. This enables you to build third-party integrations, mobile apps, and browser extensions.
+
+## Creating an OAuth App
+
+### POST /apps
+
+Create a new OAuth application.
+
+**Authentication**: Requires authentication (password auth, not OAuth)
+
+**Request Body**:
+- `name` (string, required): Application name
+- `description` (string): Application description
+- `website` (string): Application website URL
+- `redirect_uri` (string, required): OAuth callback URL
+- `scopes` (string, required): Space-separated list of permission scopes
+- `image` (string): Application logo URL
+
+**Response**: Returns the created app with a `secret` field containing the client secret. **Save this secret immediately** as it won't be shown again.
+
+---
+
+## Updating an OAuth App
+
+### PATCH /apps/:id
+
+Update an existing OAuth application's settings.
+
+**Authentication**: Requires authentication (password auth, not OAuth)
+
+**Path Parameters**:
+- `id` (string): Application ID with `app_` prefix
+
+**Request Body**: Same fields as creation (all optional)
+
+---
+
+## Listing Your Apps
+
+### GET /apps/created
+
+Get all OAuth apps you've created.
+
+**Authentication**: Requires `app:read` scope
+
+**Response**: Array of your OAuth applications
+
+---
+
+## Listing Authorized Apps
+
+### GET /apps/authorized
+
+Get all OAuth apps you've authorized to access your account.
+
+**Authentication**: Requires `app:read` scope
+
+**Response**: Array of apps you've granted access to
+
+---
+
+## Deleting an App
+
+### DELETE /apps/:id
+
+Permanently delete an OAuth application. This revokes access for all users.
+
+**Authentication**: Requires password authentication
+
+**Path Parameters**:
+- `id` (string): Application ID with `app_` prefix
+
+---
+
+## Revoking App Access
+
+### POST /apps/:id/revoke
+
+Revoke an app's access to your account (as a user who authorized the app).
+
+**Authentication**: Requires password authentication
+
+**Path Parameters**:
+- `id` (string): Application ID with `app_` prefix
+
+---
+
+## App Statuses
+
+- **active**: App is working normally
+- **inactive**: App is temporarily disabled
+- **suspended**: App has been suspended (all requests will fail)
+
+## Available Scopes
+
+Scopes control what the app can access:
+
+- `user:read` - Read user profile
+- `user:edit` - Edit user profile
+- `bookmark:read` - Read bookmarks
+- `bookmark:write` - Create bookmarks
+- `bookmark:edit` - Edit bookmarks
+- `bookmark:delete` - Delete bookmarks
+- `collection:read` - Read collections
+- `collection:write` - Create collections
+- `collection:edit` - Edit collections
+- `collection:delete` - Delete collections
+- `rss_feed:read` - Read RSS feeds
+- `rss_feed:write` - Create RSS feeds
+- `rss_feed:edit` - Edit RSS feeds
+- `rss_feed:delete` - Delete RSS feeds
+- `reminder:read` - Read reminders
+- `reminder:write` - Create reminders
+- `reminder:edit` - Edit reminders
+- `reminder:delete` - Delete reminders
+- And more...
+
+## Security Notes
+
+- Client secrets are never displayed after creation
+- Apps can only access data according to their granted scopes
+- Users can revoke app access at any time
+- Redirect URIs must match exactly
+- All OAuth requests are rate-limited

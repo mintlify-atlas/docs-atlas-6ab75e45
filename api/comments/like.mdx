@@ -1,0 +1,130 @@
+---
+title: "Toggle Comment Like"
+api: "POST /comments/:id/like"
+description: "Like or unlike a comment"
+---
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The public ID of the comment to like/unlike (format: `cmt_*`)
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message confirming the like was toggled
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://api.cultus.app/comments/cmt_xyz789/like \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "message": "comment like toggled"
+}
+```
+
+</ResponseExample>
+
+## Authentication
+
+Requires authentication. User must have access to the bookmark containing the comment.
+
+## Toggle Behavior
+
+This endpoint implements toggle functionality:
+- **First call**: Adds a like to the comment if not already liked
+- **Second call**: Removes the like if already liked
+- **Idempotent**: Safe to call multiple times
+
+## Implementation Details
+
+The system checks if the authenticated user has already liked the comment:
+- If no existing like is found, a new like is created in the `comment_likes` table
+- If a like already exists, it is removed from the `comment_likes` table
+
+This ensures users cannot like the same comment multiple times.
+
+## Getting Comment Likes
+
+To retrieve the list of users who liked a comment, use the **GET /comments/:id/likes** endpoint.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of profiles per page
+</ParamField>
+
+### Response Format
+
+```json
+{
+  "message": "comment likes",
+  "data": {
+    "profiles": [
+      {
+        "id": "usr_def456",
+        "name": "John Doe",
+        "username": "johndoe",
+        "avatar": "https://avatar.url/user.jpg"
+      },
+      {
+        "id": "usr_ghi789",
+        "name": "Jane Smith",
+        "username": "janesmith",
+        "avatar": "https://avatar.url/jane.jpg"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 45,
+      "total_pages": 3
+    }
+  }
+}
+```
+
+## Like Count
+
+When retrieving comments via the **GET /bookmarks/:id/comments** endpoint, each comment includes:
+- `likes_count`: Total number of likes
+- `liked`: Boolean indicating if the authenticated user has liked the comment
+
+## Error Responses
+
+<ResponseField name="400" type="Bad Request">
+  Invalid comment ID format
+</ResponseField>
+
+<ResponseField name="404" type="Not Found">
+  Comment or bookmark not found
+</ResponseField>
+
+<ResponseField name="500" type="Internal Server Error">
+  Failed to toggle like due to database error
+</ResponseField>
+
+## Use Cases
+
+### Like a Comment
+Users can like comments to show appreciation or agreement.
+
+### Unlike a Comment
+Users can remove their like by calling the endpoint again.
+
+### Social Engagement
+Likes provide social proof and help surface popular comments within bookmark discussions.

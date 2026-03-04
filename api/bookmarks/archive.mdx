@@ -1,0 +1,274 @@
+---
+title: 'Bookmark Archive'
+api: 'GET /bookmarks/:id/archive'
+---
+
+Archive bookmarks for offline access and preservation. Pro feature only.
+
+<Info>
+  Archive functionality requires a Pro subscription. Archives preserve the full HTML content of web pages for offline access.
+</Info>
+
+## Request Archive
+
+`POST /bookmarks/:id/archive`
+
+Request an archive to be created for a bookmark. The system will download and save a complete copy of the webpage.
+
+<ParamField path="id" type="string" required>
+  Bookmark ID (prefixed with `bm_`)
+</ParamField>
+
+<ResponseExample>
+```json
+{
+  "message": "bookmark archive created",
+  "data": "https://s3.example.com/archives/bm_abc123?signature=..."
+}
+```
+</ResponseExample>
+
+The response includes a pre-signed URL valid for 15 minutes to download the archive.
+
+<Warning>
+  - Only bookmarks with URLs can be archived (not file bookmarks)
+  - Archive requests can only be made once per bookmark
+  - Failed archives cannot be re-requested without deleting the bookmark
+</Warning>
+
+---
+
+## Get Archive
+
+`GET /bookmarks/:id/archive`
+
+Retrieve the archive download URL for a bookmark that has already been archived.
+
+<ParamField path="id" type="string" required>
+  Bookmark ID (prefixed with `bm_`)
+</ParamField>
+
+<ResponseExample>
+```json Success
+{
+  "data": "https://s3.example.com/archives/bm_abc123?signature=..."
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Pending
+{
+  "message": "the bookmark archive is not ready yet"
+}
+```
+</ResponseExample>
+
+<ResponseExample>
+```json Failed
+{
+  "message": "the bookmark archive failed"
+}
+```
+</ResponseExample>
+
+The download URL is a pre-signed URL valid for 15 minutes.
+
+---
+
+## Archive Status
+
+Archives can have three statuses:
+
+<ResponseField name="pending" type="status">
+  Archive has not been requested yet (default state)
+</ResponseField>
+
+<ResponseField name="success" type="status">
+  Archive was successfully created and is available for download
+</ResponseField>
+
+<ResponseField name="failed" type="status">
+  Archive creation failed (usually due to website restrictions or timeouts)
+</ResponseField>
+
+You can check the archive status in the bookmark response:
+
+```json
+{
+  "id": "bm_abc123",
+  "url": "https://example.com",
+  "archive_status": "success",
+  "archive_size": 245678.0
+}
+```
+
+---
+
+## How Archives Work
+
+1. **Request**: Client requests an archive for a bookmark
+2. **Download**: System fetches the complete webpage with all resources
+3. **Process**: Content is packaged into a single HTML file
+4. **Store**: Archive is saved to S3 storage
+5. **Access**: Pre-signed URLs are generated on-demand for downloads
+
+### What Gets Archived
+
+- Full HTML content
+- Inline CSS and JavaScript
+- Images embedded in the page
+- Fonts and other embedded resources
+
+The archive is saved as a single `.html` file that can be opened offline.
+
+---
+
+## Storage Considerations
+
+<Info>
+  Archive files count toward your storage quota. Archive sizes vary widely:
+  - Simple text pages: 50-200 KB
+  - Media-rich articles: 1-5 MB
+  - Complex web apps: 5-20 MB+
+</Info>
+
+**Deletion**: When you delete a bookmark, its archive is automatically removed from storage and your quota is freed.
+
+---
+
+## Permissions
+
+To request or access an archive, you must:
+- Be a Pro subscriber
+- Have view access to the bookmark
+- Have admin access to request a new archive
+
+---
+
+## Use Cases
+
+**Research**: Preserve articles and research papers permanently
+
+**Compliance**: Keep records of web content for legal/regulatory purposes
+
+**Offline access**: Access content when internet is unavailable
+
+**Link rot prevention**: Preserve content before websites go offline
+
+**Content backup**: Keep a snapshot of important web pages
+
+---
+
+## Limitations
+
+<Warning>
+  Archives may not work for:
+  - Dynamic single-page applications (SPAs)
+  - Content behind paywalls or login walls
+  - Sites that block archiving tools
+  - Streaming video/audio content
+  - Interactive web applications
+</Warning>
+
+Archives work best for:
+- Static articles and blog posts
+- Documentation pages
+- News articles
+- Research papers
+- Simple HTML pages
+
+---
+
+## Error Responses
+
+<ResponseField name="400" type="error">
+  Cannot archive file bookmarks, or archive already requested
+</ResponseField>
+
+<ResponseField name="402" type="error">
+  Pro subscription required
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  No permission to access or request archive
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Bookmark not found
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  Archive creation failed (website restrictions, timeout, or network error)
+</ResponseField>
+
+---
+
+## Examples
+
+<CodeGroup>
+```bash Request Archive
+curl -X POST \
+  https://api.cultus.app/v1/bookmarks/bm_abc123/archive \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
+
+```bash Get Archive
+curl -X GET \
+  https://api.cultus.app/v1/bookmarks/bm_abc123/archive \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
+
+```javascript JavaScript
+// Request archive
+const requestResponse = await fetch(
+  'https://api.cultus.app/v1/bookmarks/bm_abc123/archive',
+  {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer YOUR_TOKEN' }
+  }
+);
+
+const { data: downloadUrl } = await requestResponse.json();
+console.log('Archive URL:', downloadUrl);
+
+// Get existing archive
+const getResponse = await fetch(
+  'https://api.cultus.app/v1/bookmarks/bm_abc123/archive',
+  {
+    headers: { 'Authorization': 'Bearer YOUR_TOKEN' }
+  }
+);
+
+const result = await getResponse.json();
+if (result.data) {
+  window.location.href = result.data; // Download archive
+}
+```
+
+```python Python
+import requests
+
+# Request archive
+response = requests.post(
+    'https://api.cultus.app/v1/bookmarks/bm_abc123/archive',
+    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+
+download_url = response.json()['data']
+print(f'Download archive: {download_url}')
+
+# Get existing archive
+get_response = requests.get(
+    'https://api.cultus.app/v1/bookmarks/bm_abc123/archive',
+    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+
+if 'data' in get_response.json():
+    # Download the archive
+    archive_url = get_response.json()['data']
+    archive_content = requests.get(archive_url)
+    with open('bookmark_archive.html', 'wb') as f:
+        f.write(archive_content.content)
+```
+</CodeGroup>

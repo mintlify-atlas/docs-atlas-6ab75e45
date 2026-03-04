@@ -1,0 +1,163 @@
+---
+title: "Create Comment"
+api: "POST /comments"
+description: "Create a new comment on a bookmark or reply to an existing comment"
+---
+
+## Request Body
+
+<ParamField body="content" type="string" required>
+  The comment text content
+</ParamField>
+
+<ParamField body="bookmark" type="string" required>
+  The public ID of the bookmark to comment on (format: `bkm_*`)
+</ParamField>
+
+<ParamField body="parent" type="string">
+  The public ID of the parent comment for nested replies (format: `cmt_*`). Omit for top-level comments.
+</ParamField>
+
+## Response
+
+<ResponseField name="owner_id" type="string">
+  Public ID of the comment author
+</ResponseField>
+
+<ResponseField name="owner_name" type="string">
+  Display name of the comment author
+</ResponseField>
+
+<ResponseField name="owner_username" type="string">
+  Username of the comment author
+</ResponseField>
+
+<ResponseField name="owner_avatar" type="string">
+  Avatar URL of the comment author
+</ResponseField>
+
+<ResponseField name="id" type="string">
+  The comment's public ID (format: `cmt_*`)
+</ResponseField>
+
+<ResponseField name="user_id" type="string">
+  Public ID of the user who created the comment
+</ResponseField>
+
+<ResponseField name="bookmark_id" type="string">
+  Public ID of the bookmark this comment belongs to
+</ResponseField>
+
+<ResponseField name="parent_id" type="string" default="null">
+  Public ID of the parent comment if this is a reply
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  The comment text content
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Comment status: `active` or `hidden`
+</ResponseField>
+
+<ResponseField name="liked" type="boolean">
+  Whether the authenticated user has liked this comment
+</ResponseField>
+
+<ResponseField name="likes_count" type="integer">
+  Total number of likes on this comment
+</ResponseField>
+
+<ResponseField name="replies_count" type="integer">
+  Total number of replies to this comment
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp of when the comment was created
+</ResponseField>
+
+<ResponseField name="updated_at" type="string">
+  ISO 8601 timestamp of when the comment was last updated
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://api.cultus.app/comments \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Great resource!",
+    "bookmark": "bkm_abc123"
+  }'
+```
+
+```json Reply to Comment
+{
+  "content": "Thanks for sharing!",
+  "bookmark": "bkm_abc123",
+  "parent": "cmt_xyz789"
+}
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 201 Created
+{
+  "message": "comment created",
+  "data": {
+    "id": "cmt_xyz789",
+    "user_id": "usr_def456",
+    "bookmark_id": "bkm_abc123",
+    "parent_id": null,
+    "content": "Great resource!",
+    "status": "active",
+    "owner_id": "usr_def456",
+    "owner_name": "John Doe",
+    "owner_username": "johndoe",
+    "owner_avatar": "https://avatar.url/user.jpg",
+    "liked": false,
+    "likes_count": 0,
+    "replies_count": 0,
+    "created_at": "2026-03-04T10:00:00Z",
+    "updated_at": "2026-03-04T10:00:00Z"
+  }
+}
+```
+
+</ResponseExample>
+
+## Authentication
+
+Requires authentication. User must have access to the bookmark to comment.
+
+## Nested Comments
+
+To create a reply to an existing comment, include the `parent` field with the parent comment's public ID. The parent comment must belong to the same bookmark.
+
+## Validation
+
+- The `content` field is required and cannot be empty
+- The `bookmark` field must be a valid bookmark public ID
+- If `parent` is provided, it must be a valid comment ID belonging to the specified bookmark
+- User must have access to the bookmark (member or admin)
+
+## Error Responses
+
+<ResponseField name="422" type="Unprocessable Entity">
+  Invalid request body format
+</ResponseField>
+
+<ResponseField name="400" type="Bad Request">
+  Parent comment does not belong to this bookmark
+</ResponseField>
+
+<ResponseField name="403" type="Forbidden">
+  User doesn't have access to this bookmark
+</ResponseField>
+
+<ResponseField name="404" type="Not Found">
+  Bookmark or parent comment not found
+</ResponseField>

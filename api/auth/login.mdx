@@ -1,0 +1,322 @@
+---
+title: 'POST /auth/login'
+description: 'Authenticate a user with email/username and password'
+---
+
+## Endpoint
+
+```
+POST /v1/auth/login
+```
+
+## Authentication
+
+No authentication required. This is a public endpoint.
+
+## Rate Limits
+
+- **10 requests per 15 minutes** per IP address
+- Returns `429 Too Many Requests` when limit is exceeded
+
+## Request Body
+
+<ParamField body="identifier" type="string" required>
+  User's email address or username. Case-insensitive.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password. Minimum 6 characters.
+</ParamField>
+
+### Example Request Body
+
+```json
+{
+  "identifier": "user@example.com",
+  "password": "securepassword123"
+}
+```
+
+## Response
+
+### Success Response (200 OK)
+
+<ResponseField name="success" type="boolean">
+  Indicates the request was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Success message: "Welcome back!"
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Authentication response containing user details and tokens
+  
+  <Expandable title="data properties">
+    <ResponseField name="user" type="object">
+      User profile information
+      
+      <Expandable title="user properties">
+        <ResponseField name="id" type="string">
+          User's public ID (prefixed)
+        </ResponseField>
+        
+        <ResponseField name="name" type="string">
+          User's display name
+        </ResponseField>
+        
+        <ResponseField name="email" type="string">
+          User's email address
+        </ResponseField>
+        
+        <ResponseField name="username" type="string">
+          User's unique username
+        </ResponseField>
+        
+        <ResponseField name="avatar" type="string">
+          URL to user's avatar image
+        </ResponseField>
+        
+        <ResponseField name="email_verified" type="boolean">
+          Whether the email has been verified
+        </ResponseField>
+        
+        <ResponseField name="account_type" type="string">
+          Account tier: `free`, `pro`, or `enterprise`
+        </ResponseField>
+        
+        <ResponseField name="status" type="string">
+          Account status: `active`, `suspended`, or `deleted`
+        </ResponseField>
+        
+        <ResponseField name="verified" type="boolean">
+          Whether the account is verified (blue checkmark)
+        </ResponseField>
+        
+        <ResponseField name="folder_name" type="string">
+          User's default folder name
+        </ResponseField>
+        
+        <ResponseField name="private_account" type="boolean">
+          Whether the account is private
+        </ResponseField>
+        
+        <ResponseField name="last_login_at" type="string">
+          ISO 8601 timestamp of last login
+        </ResponseField>
+        
+        <ResponseField name="created_at" type="string">
+          ISO 8601 timestamp of account creation
+        </ResponseField>
+        
+        <ResponseField name="updated_at" type="string">
+          ISO 8601 timestamp of last update
+        </ResponseField>
+        
+        <ResponseField name="push_enabled" type="boolean">
+          Push notification preference
+        </ResponseField>
+        
+        <ResponseField name="email_enabled" type="boolean">
+          Email notification preference
+        </ResponseField>
+        
+        <ResponseField name="in_app_enabled" type="boolean">
+          In-app notification preference
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="access_token" type="string">
+      JWT access token for API requests. Valid for a short duration.
+    </ResponseField>
+    
+    <ResponseField name="refresh_token" type="string">
+      JWT refresh token to obtain new access tokens. Valid for a longer duration.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Success Response
+
+```json
+{
+  "success": true,
+  "message": "Welcome back!",
+  "data": {
+    "user": {
+      "id": "usr_2kxj9mN5pQrL8wZ3",
+      "name": "John Doe",
+      "email": "user@example.com",
+      "username": "johndoe",
+      "avatar": "https://cdn.cultus.io/avatars/01.png",
+      "email_verified": true,
+      "account_type": "free",
+      "status": "active",
+      "verified": false,
+      "folder_name": "Folder",
+      "private_account": false,
+      "last_login_at": "2026-03-04T12:30:00Z",
+      "created_at": "2025-01-15T08:20:00Z",
+      "updated_at": "2026-03-04T12:30:00Z",
+      "push_enabled": false,
+      "email_enabled": true,
+      "in_app_enabled": true
+    },
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+## Error Responses
+
+### 400 Bad Request - Invalid Credentials
+
+```json
+{
+  "success": false,
+  "message": "invalid credentials",
+  "error": "ERR_INVALID_CREDS"
+}
+```
+
+### 403 Forbidden - Account Suspended
+
+```json
+{
+  "success": false,
+  "message": "account suspended"
+}
+```
+
+### 404 Not Found - Account Deleted
+
+```json
+{
+  "success": false,
+  "message": "account not found"
+}
+```
+
+### 422 Unprocessable Entity - Validation Error
+
+```json
+{
+  "success": false,
+  "message": "validation failed",
+  "errors": [
+    {
+      "field": "password",
+      "message": "password must be at least 6 characters"
+    }
+  ]
+}
+```
+
+### 429 Too Many Requests - Rate Limit Exceeded
+
+```json
+{
+  "success": false,
+  "message": "rate limit exceeded"
+}
+```
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.cultus.io/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identifier": "user@example.com",
+    "password": "securepassword123"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.cultus.io/v1/auth/login', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    identifier: 'user@example.com',
+    password: 'securepassword123',
+  }),
+});
+
+const data = await response.json();
+console.log(data.data.access_token);
+```
+
+```python Python
+import requests
+
+url = 'https://api.cultus.io/v1/auth/login'
+data = {
+    'identifier': 'user@example.com',
+    'password': 'securepassword123'
+}
+
+response = requests.post(url, json=data)
+result = response.json()
+print(result['data']['access_token'])
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "net/http"
+)
+
+type LoginRequest struct {
+    Identifier string `json:"identifier"`
+    Password   string `json:"password"`
+}
+
+func main() {
+    url := "https://api.cultus.io/v1/auth/login"
+    
+    payload := LoginRequest{
+        Identifier: "user@example.com",
+        Password:   "securepassword123",
+    }
+    
+    jsonData, _ := json.Marshal(payload)
+    
+    resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        panic(err)
+    }
+    defer resp.Body.Close()
+    
+    var result map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&result)
+    fmt.Println(result["data"].(map[string]interface{})["access_token"])
+}
+```
+
+</CodeGroup>
+
+## Notes
+
+- The endpoint automatically sets HTTP-only cookies with the access and refresh tokens
+- The `identifier` field accepts both email addresses and usernames
+- Email and username matching is case-insensitive
+- The user's `last_login_at` timestamp is updated on successful login
+- If the account was previously soft-deleted, it will be restored to active status on login
+- Password authentication is required (OAuth users without passwords cannot use this endpoint)
+
+## Related Endpoints
+
+- [POST /auth/signup](/api/auth/signup) - Create a new account
+- [POST /auth/token/refresh](/api/auth/refresh-token) - Refresh access token
+- [POST /auth/logout](/api/auth/logout) - Logout and revoke tokens
+- [POST /auth/otp/request](/api/auth/otp) - Request OTP for passwordless login

@@ -1,0 +1,429 @@
+---
+title: Users
+description: Understanding user accounts, profiles, and settings in Cultus
+---
+
+## Overview
+
+Users are the foundation of Cultus. Each user has an account with associated profile information, preferences, and storage quotas.
+
+## User Model
+
+The user model contains account and profile information:
+
+### Core Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Public identifier for the user |
+| `name` | string | Display name |
+| `email` | string | Email address (unique) |
+| `username` | string | Username (unique, max 30 characters) |
+| `avatar` | string | Profile picture URL |
+| `created_at` | timestamp | Account creation date |
+| `updated_at` | timestamp | Last profile update |
+| `last_login_at` | timestamp | Last authentication timestamp |
+
+### Account Type
+
+| Value | Description |
+|-------|-------------|
+| `free` | Free tier (default) |
+| `pro` | Pro subscription |
+| `enterprise` | Enterprise plan |
+
+### Status Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | enum | `active`, `suspended`, or `deleted` |
+| `email_verified` | boolean | Whether email is verified |
+| `verified` | boolean | Whether account is verified (badge) |
+| `private_account` | boolean | Whether profile is private |
+
+### Settings Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `folder_name` | string | Display name for root folder (default: "Folder") |
+| `push_notification_enabled` | boolean | Push notifications enabled |
+| `email_notification_enabled` | boolean | Email notifications enabled |
+| `in_app_notification_enabled` | boolean | In-app notifications enabled |
+
+### Private Fields
+
+These fields are not exposed in API responses:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `password` | string | Hashed password (bcrypt, nullable for OAuth) |
+| `push_token` | string | Device push notification token |
+| `deleted_at` | timestamp | Soft deletion timestamp |
+
+## Account Types
+
+Users have different capabilities based on account type:
+
+### Free Account
+
+**Default tier** for new users:
+
+- Unlimited bookmarks
+- Limited file upload storage
+- Basic features
+- Community support
+
+### Pro Account
+
+**Paid subscription** with enhanced features:
+
+- Increased storage quota
+- Priority support
+- Advanced features
+- Custom branding (where applicable)
+
+### Enterprise Account
+
+**Organization-level** features:
+
+- Highest storage quota
+- Dedicated support
+- Team management
+- SSO integration (if available)
+- Custom SLA
+
+## User Status
+
+Accounts can have different statuses:
+
+### Active
+
+**Normal state** (`status: "active"`):
+
+- Can authenticate
+- Can access all features
+- Profile is visible (unless private)
+
+### Suspended
+
+**Temporary restriction** (`status: "suspended"`):
+
+- Cannot authenticate
+- Data is preserved
+- Can be reactivated by admin
+
+Reasons for suspension:
+- Terms of service violations
+- Payment issues
+- Security concerns
+
+### Deleted
+
+**Soft deletion** (`status: "deleted"`):
+
+- Cannot authenticate
+- Profile is hidden
+- Data is marked for deletion
+- Account can be recovered within retention period
+
+When deleted:
+1. User status is set to `deleted`
+2. `deleted_at` timestamp is recorded
+3. User is added to cleanup queue
+4. After retention period, data is permanently removed
+
+## Public Profiles
+
+Public user profiles expose limited information:
+
+```typescript
+interface PublicProfile {
+  id: string
+  name: string
+  username: string
+  avatar: string
+  account_type: "free" | "pro" | "enterprise"
+  status: "active" | "suspended" | "deleted"
+  verified: boolean
+  created_at: timestamp
+  private_account: boolean
+  role?: "admin" | "viewer"  // Context-dependent (e.g., in collections)
+}
+```
+
+### Private Accounts
+
+When `private_account: true`:
+
+- Profile is not visible in public directories
+- Collections are not discoverable
+- User can still be invited to collections
+- Public profile still shows in contexts where user is a member
+
+## Storage Quotas
+
+Users have storage limits based on account type:
+
+### Storage Calculation
+
+Total storage usage includes:
+
+```typescript
+interface StorageUsage {
+  total: number        // Total bytes used
+  bookmarks: number    // Bookmark file storage
+  archives: number     // Archived content storage
+  avatars: number      // Profile pictures
+  covers: number       // Custom covers
+}
+```
+
+Calculated as:
+```sql
+SELECT SUM(size) + SUM(archive_size) as storage
+FROM bookmarks
+WHERE user_id = {user_id}
+```
+
+### Detailed Storage Breakdown
+
+Get per-bookmark storage usage:
+
+```http
+GET /v1/users/me/storage/detailed
+```
+
+Returns:
+```typescript
+interface DetailedStorageUsage {
+  bookmarks: BookmarkStorage[]
+  pagination: Pagination
+  total: number
+}
+
+interface BookmarkStorage {
+  id: string
+  title: string
+  url: string
+  collection_id: string
+  collection_name: string
+  size: number          // File size
+  mime_type_id: number
+  thumbnail: string
+  created_at: timestamp
+}
+```
+
+### Quota Enforcement
+
+When approaching or exceeding quota:
+
+1. **Warning:** User is notified at 80% usage
+2. **Soft limit:** At 100%, new uploads show warning
+3. **Hard limit:** At 110%, uploads are blocked
+4. **Cleanup:** User can delete content to free space
+
+## User Settings
+
+Users can customize their experience:
+
+### Notification Preferences
+
+```json
+{
+  "push_enabled": true,
+  "email_enabled": false,
+  "in_app_enabled": true
+}
+```
+
+Controls:
+- Push notifications to mobile devices
+- Email notifications for activity
+- In-app notification badges
+
+### Profile Settings
+
+```json
+{
+  "name": "John Doe",
+  "username": "johndoe",
+  "email": "john@example.com",
+  "folder_name": "My Bookmarks",
+  "private_account": false,
+  "avatar": "https://storage.example.com/avatars/user_abc.jpg"
+}
+```
+
+### Password Management
+
+Users can change passwords:
+
+```json
+{
+  "old_password": "current_password",
+  "new_password": "new_password"
+}
+```
+
+**Note:** Password is nullable for OAuth-only accounts.
+
+## External Account Linking
+
+Users can link external accounts for authentication:
+
+### OAuth Providers
+
+Supported providers (implementation-dependent):
+- Google
+- GitHub
+- Other OAuth providers
+
+Linked accounts stored in `external_accounts` table:
+
+```typescript
+interface ExternalAccount {
+  id: number
+  user_id: number
+  stripe_customer_id: string  // For billing integration
+  created_at: timestamp
+  updated_at: timestamp
+}
+```
+
+### Social Authentication
+
+Users can authenticate via:
+- Email/password
+- OAuth providers
+- QR code (mobile apps)
+
+OAuth-authenticated users:
+- Have `password: null`
+- Must use OAuth for login
+- Can set password later for email/password access
+
+## User Sync
+
+Cultus supports offline-first synchronization:
+
+### Sync Protocol
+
+Clients send changesets:
+
+```typescript
+interface SyncDatabaseSchema {
+  changes: {
+    bookmarks: {
+      created: SyncCreatedBookmark[]
+      updated: SyncCreatedBookmark[]
+      deleted: string[]  // Bookmark IDs
+    }
+  }
+  timestamp: number  // Last sync timestamp
+}
+```
+
+### Local IDs
+
+Offline-created bookmarks have:
+- `local_id`: Client-generated unique identifier
+- Server assigns permanent `id` on sync
+- Prevents duplicates during sync
+
+### Conflict Resolution
+
+Server uses timestamp-based resolution:
+- Latest `updated_at` wins
+- Server changes take precedence if timestamps equal
+- Deleted items are tracked in tombstone tables
+
+## API Keys
+
+Users can create API keys for programmatic access:
+
+```typescript
+interface APIKey {
+  id: string
+  user_id: string
+  name: string
+  secret: string       // Only shown once at creation
+  status: "active" | "inactive" | "revoked"
+  usage_count: number
+  created_at: timestamp
+  last_used_at: timestamp
+  revoked_at?: timestamp
+}
+```
+
+API keys:
+- Grant full account access (no scoping)
+- Can be revoked anytime
+- Track usage count and last used time
+- Are hashed in database (like passwords)
+
+See [Permissions](/concepts/permissions#api-keys) for details.
+
+## Push Notifications
+
+Users can receive push notifications:
+
+### Push Tokens
+
+Mobile devices register tokens:
+
+```http
+POST /v1/users/push-token
+{
+  "token": "device_token_string"
+}
+```
+
+Tokens:
+- Identify device for push delivery
+- Are stored in `push_token` field
+- Are updated on each app launch
+- Are removed on logout
+
+### Notification Types
+
+- Collection invitations
+- Comment replies
+- Mention notifications
+- Collection activity (configurable)
+
+## Account Deletion
+
+Users can request account deletion:
+
+### Deletion Process
+
+1. **User initiates:** Account deletion request
+2. **Status change:** User status → `deleted`
+3. **Timestamp:** `deleted_at` is recorded
+4. **Queue:** User added to cleanup batch job
+5. **Retention:** Data kept for recovery period
+6. **Cleanup:** After retention, permanent deletion
+
+### What Gets Deleted
+
+- User profile and credentials
+- All bookmarks (including trashed)
+- All collections (user is owner)
+- All memberships (user is member)
+- All comments and stars
+- All uploaded files and archives
+- All API keys and OAuth sessions
+
+### What's Preserved
+
+- Audit logs (anonymized)
+- Aggregated analytics
+- Legal compliance data
+
+## Related Resources
+
+- [Bookmarks](/concepts/bookmarks) - User's saved content
+- [Collections](/concepts/collections) - User's organization
+- [Permissions](/concepts/permissions) - Access control
+- [Authentication](/api-reference/authentication) - Login and OAuth

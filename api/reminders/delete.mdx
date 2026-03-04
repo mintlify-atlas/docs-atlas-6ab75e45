@@ -1,0 +1,132 @@
+---
+title: "Delete Reminders"
+description: "Remove individual or multiple reminders"
+---
+
+## DELETE /reminders/:id
+
+Delete a single reminder.
+
+### Authentication
+
+Requires authentication with `reminder:delete` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Reminder ID (with `rem_` prefix)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "reminder deleted"
+}
+```
+</ResponseExample>
+
+### Example Request
+
+```bash
+curl -X DELETE https://api.cultus.app/reminders/rem_abc123 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+---
+
+## POST /reminders/batch-delete
+
+Delete multiple reminders at once.
+
+### Authentication
+
+Requires authentication with `reminder:delete` scope.
+
+### Request Body
+
+<ParamField body="reminders" type="array" required>
+  Array of reminder IDs to delete (with `rem_` prefix)
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="Response Data">
+    <ResponseField name="count" type="integer">
+      Number of reminders deleted
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "reminders deleted",
+  "data": {
+    "count": 5
+  }
+}
+```
+</ResponseExample>
+
+### Validation
+
+- At least one reminder ID is required
+- Maximum batch size is limited by server configuration
+- All IDs must be valid and prefixed with `rem_`
+
+### Example Request
+
+```bash
+curl -X POST https://api.cultus.app/reminders/batch-delete \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reminders": ["rem_abc123", "rem_def456", "rem_ghi789"]
+  }'
+```
+
+---
+
+## POST /reminders/clear
+
+Delete all reminders for the authenticated user.
+
+### Authentication
+
+Requires authentication with `reminder:delete` scope.
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "all reminders deleted"
+}
+```
+</ResponseExample>
+
+### Example Request
+
+```bash
+curl -X POST https://api.cultus.app/reminders/clear \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Warning
+
+This operation permanently deletes all your reminders and cannot be undone.

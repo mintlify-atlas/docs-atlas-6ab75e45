@@ -1,0 +1,127 @@
+---
+title: "Create Reminder"
+description: "Set up a new reminder for bookmarks or collections"
+---
+
+## POST /reminders
+
+Create a reminder to revisit bookmarks or collections at a specific time.
+
+### Authentication
+
+Requires authentication with `reminder:write` scope.
+
+### Request Body
+
+<ParamField body="title" type="string" required>
+  Reminder title
+</ParamField>
+
+<ParamField body="due_date" type="integer" required>
+  Unix timestamp for when the reminder should trigger (must be at least 5 minutes in the future)
+</ParamField>
+
+<ParamField body="type" type="string" required>
+  Type of items to remind about. Must be `"bookmarks"` or `"collections"`
+</ParamField>
+
+<ParamField body="items" type="array" required>
+  Array of bookmark IDs (with `bm_` prefix) or collection IDs (with `col_` prefix)
+</ParamField>
+
+<ParamField body="interval" type="string">
+  Recurrence interval. Options: `"none"`, `"hourly"`, `"daily"`, `"weekly"`, `"bi-weekly"`, `"monthly"`, `"quarterly"`, `"biannual"`, `"yearly"`
+</ParamField>
+
+<ParamField body="description" type="string">
+  Optional description or note about the reminder
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Created reminder object
+  <Expandable title="Reminder Object">
+    <ResponseField name="id" type="string">
+      Unique reminder ID with `rem_` prefix
+    </ResponseField>
+    <ResponseField name="user_id" type="string">
+      Owner's user ID
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      Reminder title
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      Reminder description
+    </ResponseField>
+    <ResponseField name="type" type="string">
+      `"bookmarks"` or `"collections"`
+    </ResponseField>
+    <ResponseField name="items" type="string">
+      Comma-separated list of item IDs
+    </ResponseField>
+    <ResponseField name="due_date" type="integer">
+      Unix timestamp
+    </ResponseField>
+    <ResponseField name="interval" type="string">
+      Recurrence interval
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      `"active"` or `"inactive"`
+    </ResponseField>
+    <ResponseField name="created_at" type="string">
+      Creation timestamp
+    </ResponseField>
+    <ResponseField name="updated_at" type="string">
+      Last update timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "reminder created",
+  "data": {
+    "id": "rem_abc123",
+    "user_id": "usr_xyz789",
+    "title": "Review articles",
+    "type": "bookmarks",
+    "items": "bm_aaa111,bm_bbb222",
+    "due_date": 1735689600,
+    "interval": "weekly",
+    "status": "active",
+    "created_at": "2026-03-04T10:00:00Z",
+    "updated_at": "2026-03-04T10:00:00Z"
+  }
+}
+```
+</ResponseExample>
+
+### Validation
+
+- Due date must be at least 5 minutes in the future
+- Free users are limited to 3 reminders total
+- Free users can only add 1 bookmark per reminder
+- Pro users have unlimited reminders and items
+- All item IDs must be valid bookmarks or collections
+
+### Example Request
+
+```bash
+curl -X POST https://api.cultus.app/reminders \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Review articles",
+    "due_date": 1735689600,
+    "type": "bookmarks",
+    "items": ["bm_aaa111", "bm_bbb222"],
+    "interval": "weekly",
+    "description": "Weekly review of saved articles"
+  }'
+```

@@ -1,0 +1,139 @@
+---
+title: "Get RSS Feeds"
+description: "Retrieve RSS feed subscriptions and their items"
+---
+
+## GET /rss-feeds
+
+Retrieve all RSS feeds you're subscribed to with pagination support.
+
+### Authentication
+
+Requires authentication with `rss_feed:read` scope.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of feeds per page
+</ParamField>
+
+### Response
+
+<ResponseField name="rss_feeds" type="array">
+  Array of RSS feed objects
+  <Expandable title="RSS Feed Object">
+    <ResponseField name="id" type="string">
+      Unique feed identifier with `rss_` prefix
+    </ResponseField>
+    <ResponseField name="user_id" type="string">
+      Owner's user ID
+    </ResponseField>
+    <ResponseField name="collection_id" type="string">
+      Associated collection ID (if any)
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      Feed title
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      Feed description
+    </ResponseField>
+    <ResponseField name="url" type="string">
+      Feed URL
+    </ResponseField>
+    <ResponseField name="count" type="integer">
+      Number of items in the feed
+    </ResponseField>
+    <ResponseField name="processing" type="boolean">
+      Whether feed is currently being processed
+    </ResponseField>
+    <ResponseField name="failed" type="boolean">
+      Whether last fetch failed
+    </ResponseField>
+    <ResponseField name="last_fetched_at" type="string">
+      Timestamp of last successful fetch
+    </ResponseField>
+    <ResponseField name="created_at" type="string">
+      Feed creation timestamp
+    </ResponseField>
+    <ResponseField name="updated_at" type="string">
+      Last update timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  Pagination metadata
+</ResponseField>
+
+---
+
+## GET /rss-feeds/:id/items
+
+Retrieve all bookmarks created from a specific RSS feed.
+
+### Authentication
+
+Requires authentication with `rss_feed:read` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  RSS feed ID (with `rss_` prefix)
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of items per page
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="array">
+  Array of bookmark objects created from the feed
+  <Expandable title="Feed Item Object">
+    <ResponseField name="id" type="string">
+      Bookmark ID with `bm_` prefix
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      Bookmark title
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      Bookmark description
+    </ResponseField>
+    <ResponseField name="url" type="string">
+      Bookmark URL
+    </ResponseField>
+    <ResponseField name="icon" type="string">
+      Site favicon URL
+    </ResponseField>
+    <ResponseField name="thumbnail" type="string">
+      Preview image URL
+    </ResponseField>
+    <ResponseField name="created_at" type="string">
+      Creation timestamp
+    </ResponseField>
+    <ResponseField name="updated_at" type="string">
+      Last update timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  Pagination metadata
+</ResponseField>
+
+### Example Request
+
+```bash
+curl https://api.cultus.app/rss-feeds/rss_abc123/items?page=1&limit=20 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```

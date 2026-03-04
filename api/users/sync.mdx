@@ -1,0 +1,258 @@
+---
+title: "Sync Protocol"
+api: "GET /user/sync"
+description: "Pull bookmark changes from the server for offline-first synchronization"
+---
+
+## Authentication
+
+Requires a valid authentication token in the request headers.
+
+## Overview
+
+Cultus uses a bi-directional sync protocol to support offline-first applications. Clients can:
+1. **Pull** changes from the server to get updates since their last sync
+2. **Push** local changes to the server to propagate offline modifications
+
+This enables seamless synchronization across devices while allowing offline bookmark management.
+
+## Query Parameters
+
+<ParamField query="last_synced_at" type="string" required>
+  ISO 8601 timestamp of the client's last successful sync. Server returns all changes that occurred after this timestamp.
+</ParamField>
+
+## Response
+
+Returns a changeset containing created, updated, and deleted bookmarks since the last sync.
+
+<ResponseField name="changes" type="object" required>
+  Container for all database changes
+  <Expandable>
+    <ResponseField name="bookmarks" type="object">
+      Bookmark table changes
+      <Expandable>
+        <ResponseField name="created" type="array">
+          Array of newly created bookmark objects
+        </ResponseField>
+        <ResponseField name="updated" type="array">
+          Array of updated bookmark objects (full objects, not diffs)
+        </ResponseField>
+        <ResponseField name="deleted" type="array">
+          Array of bookmark IDs (strings) that were deleted
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="timestamp" type="number" required>
+  Unix timestamp (seconds) of when this changeset was generated. Use this value for the next `last_synced_at` parameter.
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "changes": {
+    "bookmarks": {
+      "created": [
+        {
+          "id": "bkm_new123",
+          "title": "New Bookmark",
+          "url": "https://example.com",
+          "collection_id": "col_abc123",
+          "status": "active",
+          "created_at": "2024-01-15T10:00:00Z",
+          "updated_at": "2024-01-15T10:00:00Z"
+        }
+      ],
+      "updated": [
+        {
+          "id": "bkm_existing456",
+          "title": "Updated Title",
+          "url": "https://example.com/updated",
+          "collection_id": "col_abc123",
+          "status": "active",
+          "created_at": "2024-01-10T08:00:00Z",
+          "updated_at": "2024-01-15T11:00:00Z"
+        }
+      ],
+      "deleted": [
+        "bkm_old789",
+        "bkm_removed012"
+      ]
+    }
+  },
+  "timestamp": 1705320000
+}
+```
+</ResponseExample>
+
+## Sync Flow
+
+1. Client stores the timestamp of last successful sync
+2. Client calls `GET /user/sync?last_synced_at=<timestamp>`
+3. Server returns all changes since that timestamp
+4. Client applies changes to local database
+5. Client stores the new timestamp from response
+6. Repeat on next sync
+
+---
+
+## Push Changes to Server
+
+<api>POST /user/sync</api>
+
+Push local bookmark changes to the server, typically created or modified while offline.
+
+### Request Body
+
+<ParamField body="changes" type="object" required>
+  Container for all database changes
+  <Expandable>
+    <ParamField body="bookmarks" type="object">
+      Bookmark table changes
+      <Expandable>
+        <ParamField body="created" type="array">
+          Array of locally created bookmark objects
+        </ParamField>
+        <ParamField body="updated" type="array">
+          Array of locally updated bookmark objects
+        </ParamField>
+        <ParamField body="deleted" type="array">
+          Array of bookmark IDs that were deleted locally
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="timestamp" type="number" required>
+  Unix timestamp (seconds) when these changes were made on the client
+</ParamField>
+
+### Created Bookmark Schema
+
+When pushing locally created bookmarks, use this schema:
+
+<ParamField body="id" type="string">
+  Server-generated public ID (if syncing an existing bookmark)
+</ParamField>
+
+<ParamField body="local_id" type="string" required>
+  Client-generated temporary ID for the bookmark
+</ParamField>
+
+<ParamField body="url" type="string" required>
+  Bookmark URL
+</ParamField>
+
+<ParamField body="collection_id" type="string">
+  ID of the collection (nullable)
+</ParamField>
+
+<ParamField body="title" type="string">
+  Bookmark title
+</ParamField>
+
+<ParamField body="description" type="string">
+  Bookmark description
+</ParamField>
+
+<ParamField body="starred" type="boolean">
+  Whether the bookmark is starred
+</ParamField>
+
+<ParamField body="tags" type="string">
+  Comma-separated list of tags
+</ParamField>
+
+<ParamField body="allow_comments" type="boolean">
+  Whether comments are allowed
+</ParamField>
+
+<ParamField body="status" type="string">
+  Bookmark status: `active`, `archived`, or `trashed`
+</ParamField>
+
+<ParamField body="_created_at" type="string" required>
+  ISO 8601 timestamp of creation on client (uses `_created_at` to avoid WatermelonDB conflicts)
+</ParamField>
+
+<ParamField body="_updated_at" type="string" required>
+  ISO 8601 timestamp of last update on client (uses `_updated_at` to avoid WatermelonDB conflicts)
+</ParamField>
+
+### Response
+
+<ResponseExample>
+```json
+{
+  "message": "sync successful"
+}
+```
+</ResponseExample>
+
+### Request Example
+
+<RequestExample>
+```json
+{
+  "changes": {
+    "bookmarks": {
+      "created": [
+        {
+          "local_id": "temp_abc123",
+          "url": "https://newsite.com",
+          "collection_id": "col_xyz789",
+          "title": "Offline Created Bookmark",
+          "description": "Created while offline",
+          "starred": true,
+          "tags": "offline,important",
+          "allow_comments": true,
+          "status": "active",
+          "_created_at": "2024-01-15T09:30:00Z",
+          "_updated_at": "2024-01-15T09:30:00Z"
+        }
+      ],
+      "updated": [
+        {
+          "id": "bkm_existing456",
+          "title": "Updated While Offline",
+          "_updated_at": "2024-01-15T10:00:00Z"
+        }
+      ],
+      "deleted": [
+        "bkm_removed789"
+      ]
+    }
+  },
+  "timestamp": 1705316400
+}
+```
+</RequestExample>
+
+## Side Effects
+
+- Created bookmarks trigger background processing for link metadata extraction
+- New bookmarks publish events to the queue system
+- The server assigns permanent IDs to locally created bookmarks
+
+## Empty Sync
+
+If `changes.bookmarks` is null or `timestamp` is 0, the request succeeds with a "no changes to sync" message.
+
+## Conflict Resolution
+
+The server uses a "last write wins" strategy. The client is responsible for:
+- Detecting conflicts based on `updated_at` timestamps
+- Merging changes intelligently when conflicts occur
+- Preserving user intent in conflict scenarios
+
+## Integration with WatermelonDB
+
+The sync protocol is designed to work seamlessly with [WatermelonDB](https://nozbe.github.io/WatermelonDB/), a reactive database for React Native:
+
+- Field names use `_created_at` and `_updated_at` to avoid WatermelonDB's protected fields
+- The changeset format matches WatermelonDB's sync adapter expectations
+- Local IDs allow tracking bookmarks before server assignment

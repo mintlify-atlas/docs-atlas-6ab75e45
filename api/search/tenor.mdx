@@ -1,0 +1,231 @@
+---
+title: Search Tenor GIFs
+api: GET /search/tenor
+---
+
+Search for GIFs using the Tenor API integration. This endpoint allows Pro users to search and retrieve animated GIFs for use in bookmarks and collections.
+
+<Warning>
+  This endpoint requires a Pro subscription.
+</Warning>
+
+<Note>
+  This endpoint requires authentication and the `search:read` scope.
+</Note>
+
+## Query Parameters
+
+<ParamField query="q" type="string" required>
+  The search query for finding GIFs. This parameter is **required**.
+  
+  **Examples:**
+  - `happy`
+  - `dancing cat`
+  - `thumbs up`
+</ParamField>
+
+## Response
+
+<ResponseField name="data" type="array">
+  Array of GIF objects from Tenor.
+  
+  <Expandable title="properties">
+    <ResponseField name="gif" type="string">
+      URL to the full-size GIF image
+    </ResponseField>
+    <ResponseField name="tiny_gif" type="string">
+      URL to a smaller, compressed version of the GIF for thumbnails
+    </ResponseField>
+    <ResponseField name="preview" type="string">
+      URL to a preview/thumbnail image of the GIF
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Pro Subscription Required
+
+This endpoint is restricted to Pro users. Attempting to use this endpoint without a Pro subscription will result in a 403 Forbidden error.
+
+**Benefits for Pro users:**
+- Access to millions of GIFs from Tenor's library
+- High-quality GIF formats optimized for different use cases
+- Multiple size options for bandwidth optimization
+- Preview images for fast loading
+
+## Examples
+
+### Search for Happy GIFs
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.cultus.app/search/tenor?q=happy" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.cultus.app/search/tenor?q=happy', {
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN'
+  }
+});
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.cultus.app/search/tenor',
+    params={'q': 'happy'},
+    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+data = response.json()
+```
+</CodeGroup>
+
+### Search for Celebration GIFs
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.cultus.app/search/tenor?q=celebration" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.cultus.app/search/tenor?q=celebration', {
+  headers: {
+    'Authorization': 'Bearer YOUR_TOKEN'
+  }
+});
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.cultus.app/search/tenor',
+    params={'q': 'celebration'},
+    headers={'Authorization': 'Bearer YOUR_TOKEN'}
+)
+data = response.json()
+```
+</CodeGroup>
+
+## Response Example
+
+```json
+{
+  "data": [
+    {
+      "gif": "https://media.tenor.com/example1.gif",
+      "tiny_gif": "https://media.tenor.com/example1-tiny.gif",
+      "preview": "https://media.tenor.com/example1-preview.png"
+    },
+    {
+      "gif": "https://media.tenor.com/example2.gif",
+      "tiny_gif": "https://media.tenor.com/example2-tiny.gif",
+      "preview": "https://media.tenor.com/example2-preview.png"
+    },
+    {
+      "gif": "https://media.tenor.com/example3.gif",
+      "tiny_gif": "https://media.tenor.com/example3-tiny.gif",
+      "preview": "https://media.tenor.com/example3-preview.png"
+    }
+  ]
+}
+```
+
+## Error Responses
+
+<ResponseField name="400 Bad Request" type="error">
+  Missing required query parameter.
+  ```json
+  {
+    "error": {
+      "message": "query is required"
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="403 Forbidden" type="error">
+  Pro subscription required.
+  ```json
+  {
+    "error": {
+      "message": "you need to be a pro user to use Tenor"
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="400 Bad Request" type="error">
+  Tenor API search failed.
+  ```json
+  {
+    "error": {
+      "message": "failed to search Tenor, please try again"
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="401 Unauthorized" type="error">
+  Missing or invalid authentication token.
+</ResponseField>
+
+## Usage Tips
+
+<Tip>
+  **Optimize for bandwidth:** Use the `tiny_gif` URL for thumbnail displays and the full `gif` URL only when the user wants to view or download the full-size version.
+</Tip>
+
+<Tip>
+  **Use preview images:** The `preview` URL provides a static image that loads faster than animated GIFs, perfect for initial displays before loading the full animation.
+</Tip>
+
+<Tip>
+  **Search best practices:** Use specific, descriptive search terms for better results. Generic terms like "happy" or "sad" work, but more specific terms like "excited dog" or "typing fast" will yield more targeted results.
+</Tip>
+
+## Integration Example
+
+Here's a complete example of integrating Tenor GIF search into your application:
+
+```javascript
+async function searchAndDisplayGifs(query) {
+  try {
+    const response = await fetch(
+      `https://api.cultus.app/search/tenor?q=${encodeURIComponent(query)}`,
+      {
+        headers: {
+          'Authorization': 'Bearer YOUR_TOKEN'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error.message);
+    }
+    
+    const { data } = await response.json();
+    
+    // Display previews initially
+    data.forEach(gif => {
+      console.log('Preview:', gif.preview);
+      console.log('Full GIF:', gif.gif);
+      console.log('Thumbnail:', gif.tiny_gif);
+    });
+    
+    return data;
+  } catch (error) {
+    console.error('GIF search failed:', error.message);
+    throw error;
+  }
+}
+
+// Usage
+searchAndDisplayGifs('celebration');
+```

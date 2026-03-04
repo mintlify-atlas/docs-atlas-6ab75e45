@@ -1,0 +1,94 @@
+---
+title: "Get Reminders"
+description: "Retrieve reminders and their associated items"
+---
+
+## GET /reminders
+
+Retrieve all your reminders with pagination.
+
+### Authentication
+
+Requires authentication with `reminder:read` scope.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of reminders per page
+</ParamField>
+
+### Response
+
+<ResponseField name="reminders" type="array">
+  Array of reminder objects
+  <Expandable title="Reminder Object">
+    <ResponseField name="id" type="string">
+      Unique reminder ID with `rem_` prefix
+    </ResponseField>
+    <ResponseField name="user_id" type="string">
+      Owner's user ID
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      Reminder title
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      Reminder description
+    </ResponseField>
+    <ResponseField name="type" type="string">
+      `"bookmarks"` or `"collections"`
+    </ResponseField>
+    <ResponseField name="items" type="string">
+      Comma-separated list of item IDs
+    </ResponseField>
+    <ResponseField name="due_date" type="integer">
+      Unix timestamp
+    </ResponseField>
+    <ResponseField name="interval" type="string">
+      Recurrence interval
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      `"active"` or `"inactive"`
+    </ResponseField>
+    <ResponseField name="created_at" type="string">
+      Creation timestamp
+    </ResponseField>
+    <ResponseField name="updated_at" type="string">
+      Last update timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  Pagination metadata
+</ResponseField>
+
+---
+
+## GET /reminders/:id
+
+Retrieve a specific reminder by ID.
+
+### Authentication
+
+Requires authentication with `reminder:read` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Reminder ID (with `rem_` prefix)
+</ParamField>
+
+### Response
+
+Returns a single reminder object with the same structure as above.
+
+### Example Request
+
+```bash
+curl https://api.cultus.app/reminders/rem_abc123 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```

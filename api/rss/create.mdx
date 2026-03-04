@@ -1,0 +1,60 @@
+---
+title: "Create RSS Feed"
+description: "Add a new RSS feed to subscribe to content updates"
+---
+
+## POST /rss-feeds
+
+Subscribe to an RSS feed by providing its URL. The feed will be processed asynchronously, and you'll receive a notification when it's ready.
+
+### Authentication
+
+Requires authentication with `rss_feed:write` scope.
+
+### Request Body
+
+<ParamField body="url" type="string" required>
+  The URL of the RSS feed to subscribe to
+</ParamField>
+
+<ParamField body="collection_id" type="string">
+  Optional collection ID to organize the feed under
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Confirmation message
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "message": "RSS feed processing, you will be notified when it's done"
+}
+```
+</ResponseExample>
+
+### Validation
+
+- RSS feed URL must be valid and accessible
+- Feed must contain at least one item
+- You cannot subscribe to the same feed URL twice
+
+### Example Request
+
+```bash
+curl -X POST https://api.cultus.app/rss-feeds \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/feed.xml",
+    "collection_id": "col_abc123"
+  }'
+```
+
+### Notes
+
+- Feed processing happens asynchronously in the background
+- You'll receive a real-time notification when processing completes
+- Failed feeds will be marked with `failed: true`

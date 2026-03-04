@@ -1,0 +1,207 @@
+---
+title: 'Manage Invites'
+description: 'Collection invitation endpoints'
+---
+
+## Overview
+
+Invites allow collection owners to invite other users to collaborate on their collections. Users can accept or decline invitations.
+
+## GET /invites
+
+Get all pending invitations for the authenticated user.
+
+### Authentication
+
+Requires valid JWT access token with `invite:read` scope.
+
+### Query Parameters
+
+<ParamField query="status" type="string">
+  Filter by status: "pending", "accepted", "declined"
+</ParamField>
+
+### Response
+
+<ResponseField name="invites" type="array">
+  Array of invite objects
+</ResponseField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/invites \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "invites": [
+    {
+      "id": "inv_abc123",
+      "collection_id": "col_xyz789",
+      "collection_name": "Team Resources",
+      "inviter_username": "johndoe",
+      "role": "viewer",
+      "status": "pending",
+      "created_at": "2024-03-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## GET /invites/:id
+
+Get details of a specific invitation.
+
+### Authentication
+
+Requires valid JWT access token with `invite:read` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The invitation ID
+</ParamField>
+
+---
+
+## POST /invites/:id/accept
+
+Accept a collection invitation.
+
+### Authentication
+
+Requires valid JWT access token with `invite:edit` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The invitation ID to accept
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/invites/inv_abc123/accept \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "success": true,
+  "message": "Invitation accepted",
+  "collection_id": "col_xyz789"
+}
+```
+
+---
+
+## POST /invites/batch-accept
+
+Accept multiple invitations at once.
+
+### Authentication
+
+Requires valid JWT access token with `invite:edit` scope.
+
+### Request Body
+
+<ParamField body="invite_ids" type="array" required>
+  Array of invitation IDs to accept
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/invites/batch-accept \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "invite_ids": ["inv_abc123", "inv_def456"]
+  }'
+```
+
+---
+
+## POST /invites/:id/decline
+
+Decline a collection invitation.
+
+### Authentication
+
+Requires valid JWT access token with `invite:edit` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The invitation ID to decline
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/invites/inv_abc123/decline \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+---
+
+## POST /invites/decline/all
+
+Decline all pending invitations.
+
+### Authentication
+
+Requires valid JWT access token with `invite:edit` scope.
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/invites/decline/all \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+---
+
+## POST /invites/batch-decline
+
+Decline multiple invitations at once.
+
+### Request Body
+
+<ParamField body="invite_ids" type="array" required>
+  Array of invitation IDs to decline
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/invites/batch-decline \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "invite_ids": ["inv_abc123", "inv_def456"]
+  }'
+```
+
+## Notes
+
+<Info>
+Invitations expire after 30 days if not accepted or declined.
+</Info>
+
+<Tip>
+Use batch operations to manage multiple invitations efficiently.
+</Tip>
+
+## Related Endpoints
+
+- [Send Invite](/api/collections/members) - Invite users to collections
+- [Get Collections](/api/collections/get) - View collections you're a member of

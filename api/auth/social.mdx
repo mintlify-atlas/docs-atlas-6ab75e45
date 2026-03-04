@@ -1,0 +1,194 @@
+---
+title: 'Social Authentication'
+description: 'Sign in with Google or Apple'
+---
+
+## Overview
+
+Cultus supports OAuth authentication with Google and Apple, allowing users to sign in using their existing accounts from these providers.
+
+## Sign in with Google
+
+### POST /auth/google
+
+Authenticate a user using their Google account OAuth token.
+
+#### Authentication
+
+No authentication required. This is a public endpoint.
+
+#### Rate Limits
+
+- **10 requests per 15 minutes** per IP address
+
+#### Request Body
+
+<ParamField body="id_token" type="string" required>
+  Google OAuth ID token obtained from Google Sign-In
+</ParamField>
+
+<ParamField body="access_token" type="string">
+  Optional Google OAuth access token
+</ParamField>
+
+#### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/auth/google \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE..."
+  }'
+```
+
+#### Success Response (200 OK)
+
+<ResponseField name="access_token" type="string">
+  JWT access token for API authentication (30 minutes expiry)
+</ResponseField>
+
+<ResponseField name="refresh_token" type="string">
+  JWT refresh token for obtaining new access tokens (30 days expiry)
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  User account information
+  
+  <Expandable title="properties">
+    <ResponseField name="id" type="string">
+      User's unique identifier
+    </ResponseField>
+    
+    <ResponseField name="email" type="string">
+      User's email address from Google
+    </ResponseField>
+    
+    <ResponseField name="username" type="string">
+      User's username (auto-generated if first login)
+    </ResponseField>
+    
+    <ResponseField name="account_type" type="string">
+      Account plan type: "free", "pro", or "enterprise"
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Sign in with Apple
+
+### POST /auth/apple
+
+Authenticate a user using their Apple ID OAuth token.
+
+#### Authentication
+
+No authentication required. This is a public endpoint.
+
+#### Rate Limits
+
+- **10 requests per 15 minutes** per IP address
+
+#### Request Body
+
+<ParamField body="id_token" type="string" required>
+  Apple OAuth ID token obtained from Apple Sign-In
+</ParamField>
+
+<ParamField body="authorization_code" type="string">
+  Optional Apple authorization code
+</ParamField>
+
+<ParamField body="user" type="object">
+  User information from Apple (only provided on first sign-in)
+  
+  <Expandable title="properties">
+    <ParamField body="email" type="string">
+      User's email address
+    </ParamField>
+    
+    <ParamField body="name" type="object">
+      User's name object from Apple
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/auth/apple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id_token": "eyJraWQiOiJlWGF1bm1MIiwiYWxnIjoiUlMyNTYifQ...",
+    "user": {
+      "email": "user@privaterelay.appleid.com"
+    }
+  }'
+```
+
+#### Success Response (200 OK)
+
+Same response format as Google authentication above.
+
+---
+
+## Account Linking
+
+<Info>
+If a user signs in with Google or Apple and an account with that email already exists (created via email/password), the accounts will be automatically linked.
+</Info>
+
+## Error Responses
+
+<Accordion title="400 Bad Request - Invalid Token">
+```json
+{
+  "error": "Bad Request",
+  "message": "Invalid OAuth token"
+}
+```
+</Accordion>
+
+<Accordion title="422 Unprocessable Entity - Validation Error">
+```json
+{
+  "error": "Unprocessable Entity",
+  "message": "id_token is required"
+}
+```
+</Accordion>
+
+<Accordion title="429 Too Many Requests">
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded"
+}
+```
+</Accordion>
+
+## Implementation Guide
+
+### Google Sign-In
+
+1. Implement Google Sign-In in your client application
+2. Obtain the ID token from the Google Sign-In response
+3. Send the token to Cultus `/auth/google` endpoint
+4. Store the returned access and refresh tokens
+
+### Apple Sign-In
+
+1. Implement Apple Sign-In in your client application
+2. Obtain the ID token and authorization code from Apple
+3. Send the credentials to Cultus `/auth/apple` endpoint
+4. Store the returned access and refresh tokens
+
+<Tip>
+For mobile applications, use the native Google/Apple Sign-In SDKs. For web applications, use the Google Sign-In JavaScript library or Apple's JS framework.
+</Tip>
+
+## Related Endpoints
+
+- [Login](/api/auth/login) - Email/password authentication
+- [Signup](/api/auth/signup) - Create new account
+- [Refresh Token](/api/auth/refresh-token) - Renew access token

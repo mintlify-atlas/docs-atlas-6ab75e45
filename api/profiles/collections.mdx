@@ -1,0 +1,228 @@
+---
+title: 'Profile Collections'
+description: 'View public collections from user profiles'
+---
+
+## GET /profiles/:username/collections
+
+Get a list of all public collections from a user's profile.
+
+### Authentication
+
+No authentication required for public collections.
+
+### Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the profile
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of collections per page (max 100)
+</ParamField>
+
+### Response
+
+Returns an array of collection objects.
+
+<ResponseField name="id" type="string">
+  Collection's unique identifier
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Collection name
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Collection description
+</ResponseField>
+
+<ResponseField name="icon" type="string">
+  Collection icon/emoji
+</ResponseField>
+
+<ResponseField name="bookmark_count" type="integer">
+  Number of bookmarks in the collection
+</ResponseField>
+
+<ResponseField name="is_public" type="boolean">
+  Whether the collection is public (always true for this endpoint)
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  Creation timestamp
+</ResponseField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/profiles/johndoe/collections?limit=10
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "collections": [
+    {
+      "id": "col_xyz789",
+      "name": "Web Development",
+      "description": "Curated resources for web developers",
+      "icon": "💻",
+      "bookmark_count": 45,
+      "is_public": true,
+      "created_at": "2024-01-20T14:30:00Z"
+    },
+    {
+      "id": "col_abc456",
+      "name": "Design Inspiration",
+      "description": "Beautiful design examples and portfolios",
+      "icon": "🎨",
+      "bookmark_count": 32,
+      "is_public": true,
+      "created_at": "2024-02-05T09:15:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 12,
+    "has_more": true
+  }
+}
+```
+
+---
+
+## GET /profiles/:username/collections/:id
+
+Get a specific public collection from a user's profile.
+
+### Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the profile
+</ParamField>
+
+<ParamField path="id" type="string" required>
+  The collection ID
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/profiles/johndoe/collections/col_xyz789
+```
+
+---
+
+## GET /profiles/:username/collections/:id/bookmarks
+
+Get bookmarks from a public collection.
+
+### Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the profile
+</ParamField>
+
+<ParamField path="id" type="string" required>
+  The collection ID
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of bookmarks per page
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/profiles/johndoe/collections/col_xyz789/bookmarks
+```
+
+---
+
+## GET /profiles/:username/collections/:id/rss
+
+Get an RSS feed of bookmarks from a public collection.
+
+### Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the profile
+</ParamField>
+
+<ParamField path="id" type="string" required>
+  The collection ID
+</ParamField>
+
+### Response
+
+Returns an RSS feed in XML format.
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/profiles/johndoe/collections/col_xyz789/rss
+```
+
+<Tip>
+Use this endpoint to subscribe to public collections in your RSS reader and get notified when new bookmarks are added.
+</Tip>
+
+---
+
+## POST /profiles/:username/:id/join
+
+Request to join a public collection. Requires authentication.
+
+### Authentication
+
+Requires valid JWT access token.
+
+### Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the profile
+</ParamField>
+
+<ParamField path="id" type="string" required>
+  The collection ID
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/profiles/johndoe/col_xyz789/join \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "success": true,
+  "message": "Join request sent"
+}
+```
+
+<Info>
+For public collections, you'll be added immediately. For private collections, the owner must approve your request.
+</Info>
+
+## Related Endpoints
+
+- [Get Profile](/api/profiles/get) - Get user profile information
+- [Get Collections](/api/collections/get) - Manage your own collections

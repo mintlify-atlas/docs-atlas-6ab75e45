@@ -77,7 +77,9 @@
               "api/auth/login",
               "api/auth/signup",
               "api/auth/refresh-token",
-              "api/auth/otp"
+              "api/auth/otp",
+              "api/auth/logout",
+              "api/auth/social"
             ]
           },
           {
@@ -155,12 +157,34 @@
             ]
           },
           {
+            "group": "Profiles",
+            "pages": [
+              "api/profiles/get",
+              "api/profiles/collections"
+            ]
+          },
+          {
+            "group": "Invites",
+            "pages": [
+              "api/invites/manage",
+              "api/invites/links"
+            ]
+          },
+          {
+            "group": "Highlights",
+            "pages": [
+              "api/highlights/manage"
+            ]
+          },
+          {
             "group": "Utilities",
             "pages": [
               "api/parser/parse-link",
               "api/parser/import",
               "api/files/upload",
-              "api/health/check"
+              "api/health/check",
+              "api/plans/subscription",
+              "api/explore/discover"
             ]
           }
         ]

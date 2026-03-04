@@ -1,0 +1,246 @@
+---
+title: 'Discover Content'
+description: 'Explore trending and recommended bookmarks'
+---
+
+## Overview
+
+The Explore endpoints help users discover popular content, trending topics, and personalized recommendations based on their interests.
+
+## GET /explore/topics
+
+Get suggested topics based on popular tags and categories.
+
+### Authentication
+
+Requires valid JWT access token with `explore:read` scope.
+
+### Query Parameters
+
+<ParamField query="limit" type="integer" default="20">
+  Number of topics to return (max 50)
+</ParamField>
+
+### Response
+
+Returns an array of topic objects.
+
+<ResponseField name="name" type="string">
+  Topic name
+</ResponseField>
+
+<ResponseField name="bookmark_count" type="integer">
+  Number of bookmarks with this topic
+</ResponseField>
+
+<ResponseField name="trending_score" type="number">
+  Trending score (higher = more trending)
+</ResponseField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/explore/topics?limit=10 \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "topics": [
+    {
+      "name": "Web Development",
+      "bookmark_count": 1245,
+      "trending_score": 8.7
+    },
+    {
+      "name": "Machine Learning",
+      "bookmark_count": 892,
+      "trending_score": 7.3
+    },
+    {
+      "name": "UI Design",
+      "bookmark_count": 756,
+      "trending_score": 6.9
+    }
+  ]
+}
+```
+
+---
+
+## GET /explore/trending
+
+Get trending bookmarks from across the platform.
+
+### Authentication
+
+Requires valid JWT access token with `explore:read` scope.
+
+### Query Parameters
+
+<ParamField query="timeframe" type="string" default="week">
+  Time period for trending: "day", "week", "month"
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of bookmarks to return (max 100)
+</ParamField>
+
+<ParamField query="category" type="string">
+  Filter by category/topic
+</ParamField>
+
+### Response
+
+Returns an array of bookmark objects with trending metadata.
+
+<ResponseField name="id" type="string">
+  Bookmark identifier
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  Bookmark title
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Bookmark URL
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Bookmark description
+</ResponseField>
+
+<ResponseField name="thumbnail" type="string">
+  Preview image URL
+</ResponseField>
+
+<ResponseField name="trending_score" type="number">
+  Trending score (engagement-based)
+</ResponseField>
+
+<ResponseField name="star_count" type="integer">
+  Number of stars/likes
+</ResponseField>
+
+<ResponseField name="comment_count" type="integer">
+  Number of comments
+</ResponseField>
+
+<ResponseField name="owner" type="object">
+  User who created the bookmark
+</ResponseField>
+
+### Example Request
+
+```bash cURL
+curl "https://api.linkvite.io/explore/trending?timeframe=week&limit=10" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "bookmarks": [
+    {
+      "id": "bkm_abc123",
+      "title": "The Future of Web Development",
+      "url": "https://example.com/article",
+      "description": "An in-depth look at emerging web technologies",
+      "thumbnail": "https://storage.linkvite.io/thumbnails/bkm_abc123.jpg",
+      "trending_score": 9.2,
+      "star_count": 342,
+      "comment_count": 28,
+      "owner": {
+        "username": "techwriter",
+        "avatar": "https://storage.linkvite.io/avatars/usr_xyz789.jpg"
+      }
+    }
+  ],
+  "timeframe": "week"
+}
+```
+
+---
+
+## GET /explore/recommended
+
+Get personalized bookmark recommendations for the authenticated user.
+
+### Authentication
+
+Requires valid JWT access token with `explore:read` scope.
+
+### Query Parameters
+
+<ParamField query="limit" type="integer" default="20">
+  Number of recommendations to return (max 100)
+</ParamField>
+
+<ParamField query="algorithm" type="string" default="collaborative">
+  Recommendation algorithm: "collaborative", "content_based", "popular"
+</ParamField>
+
+### Response
+
+Returns an array of recommended bookmark objects.
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/explore/recommended?limit=15 \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "bookmarks": [
+    {
+      "id": "bkm_xyz789",
+      "title": "Advanced React Patterns",
+      "url": "https://example.com/react-patterns",
+      "description": "Learn advanced React development techniques",
+      "thumbnail": "https://storage.linkvite.io/thumbnails/bkm_xyz789.jpg",
+      "recommendation_score": 0.87,
+      "reason": "Based on your interest in React and JavaScript",
+      "owner": {
+        "username": "reactdev",
+        "avatar": "https://storage.linkvite.io/avatars/usr_abc456.jpg"
+      }
+    }
+  ],
+  "algorithm": "collaborative"
+}
+```
+
+<Info>
+Recommendations improve over time as you save, star, and interact with more bookmarks.
+</Info>
+
+## Recommendation Algorithms
+
+### Collaborative Filtering
+
+Recommends bookmarks based on what similar users have saved and starred. Works best when you have an established library.
+
+### Content-Based
+
+Recommends bookmarks similar to ones you've already saved, based on tags, topics, and content analysis.
+
+### Popular
+
+Shows generally popular bookmarks across the platform, weighted by your interests.
+
+<Tip>
+Try different algorithms to discover content in various ways. Collaborative filtering tends to surface hidden gems, while content-based finds similar resources.
+</Tip>
+
+## Related Endpoints
+
+- [Search Bookmarks](/api/search/bookmarks) - Search for specific content
+- [Get Bookmarks](/api/bookmarks/get) - View your saved bookmarks
+- [Get Profile Collections](/api/profiles/collections) - Browse public collections

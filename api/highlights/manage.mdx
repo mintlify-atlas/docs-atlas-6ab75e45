@@ -1,0 +1,277 @@
+---
+title: 'Text Highlights'
+description: 'Create and manage text highlights on bookmarks'
+---
+
+## Overview
+
+Highlights allow users to mark and annotate specific text passages within bookmarked content. Each highlight can have a color and optional note.
+
+## GET /highlights/:id
+
+Get all highlights for a specific bookmark.
+
+### Authentication
+
+Requires valid JWT access token with `highlight:read` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The bookmark ID to get highlights for
+</ParamField>
+
+### Response
+
+Returns an array of highlight objects.
+
+<ResponseField name="id" type="string">
+  Highlight identifier
+</ResponseField>
+
+<ResponseField name="bookmark_id" type="string">
+  Associated bookmark ID
+</ResponseField>
+
+<ResponseField name="text" type="string">
+  The highlighted text content
+</ResponseField>
+
+<ResponseField name="color" type="string">
+  Highlight color: "yellow", "green", "blue", "pink", "purple"
+</ResponseField>
+
+<ResponseField name="note" type="string">
+  Optional note/annotation attached to the highlight
+</ResponseField>
+
+<ResponseField name="position" type="object">
+  Position data for rendering the highlight
+  
+  <Expandable title="properties">
+    <ResponseField name="start" type="integer">
+      Start offset in the document
+    </ResponseField>
+    
+    <ResponseField name="end" type="integer">
+      End offset in the document
+    </ResponseField>
+    
+    <ResponseField name="xpath" type="string">
+      XPath to the highlighted element
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  Creation timestamp
+</ResponseField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/highlights/bkm_abc123xyz \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "highlights": [
+    {
+      "id": "hlt_xyz789",
+      "bookmark_id": "bkm_abc123xyz",
+      "text": "This is an important passage that I want to remember.",
+      "color": "yellow",
+      "note": "Key insight for the project",
+      "position": {
+        "start": 1250,
+        "end": 1305,
+        "xpath": "/html/body/article/p[3]"
+      },
+      "created_at": "2024-03-01T14:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## POST /highlights
+
+Create a new highlight on a bookmark.
+
+### Authentication
+
+Requires valid JWT access token with `highlight:write` scope.
+
+### Request Body
+
+<ParamField body="bookmark_id" type="string" required>
+  The bookmark ID to create the highlight on
+</ParamField>
+
+<ParamField body="text" type="string" required>
+  The text content being highlighted
+</ParamField>
+
+<ParamField body="color" type="string" required>
+  Highlight color: "yellow", "green", "blue", "pink", "purple"
+</ParamField>
+
+<ParamField body="note" type="string">
+  Optional note/annotation (max 500 characters)
+</ParamField>
+
+<ParamField body="position" type="object" required>
+  Position data for rendering
+  
+  <Expandable title="properties">
+    <ParamField body="start" type="integer" required>
+      Start offset in the document
+    </ParamField>
+    
+    <ParamField body="end" type="integer" required>
+      End offset in the document
+    </ParamField>
+    
+    <ParamField body="xpath" type="string">
+      XPath to the highlighted element
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/highlights \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bookmark_id": "bkm_abc123xyz",
+    "text": "This is an important passage",
+    "color": "yellow",
+    "note": "Remember this",
+    "position": {
+      "start": 1250,
+      "end": 1280,
+      "xpath": "/html/body/article/p[3]"
+    }
+  }'
+```
+
+### Success Response (201 Created)
+
+```json
+{
+  "id": "hlt_xyz789",
+  "bookmark_id": "bkm_abc123xyz",
+  "text": "This is an important passage",
+  "color": "yellow",
+  "note": "Remember this",
+  "position": {
+    "start": 1250,
+    "end": 1280,
+    "xpath": "/html/body/article/p[3]"
+  },
+  "created_at": "2024-03-01T14:30:00Z"
+}
+```
+
+---
+
+## PATCH /highlights/:id
+
+Update an existing highlight.
+
+### Authentication
+
+Requires valid JWT access token with `highlight:edit` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The highlight ID to update
+</ParamField>
+
+### Request Body
+
+<ParamField body="color" type="string">
+  New highlight color
+</ParamField>
+
+<ParamField body="note" type="string">
+  New or updated note
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X PATCH https://api.linkvite.io/highlights/hlt_xyz789 \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "color": "green",
+    "note": "Updated annotation"
+  }'
+```
+
+---
+
+## DELETE /highlights/:id
+
+Delete a highlight permanently.
+
+### Authentication
+
+Requires valid JWT access token with `highlight:delete` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The highlight ID to delete
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X DELETE https://api.linkvite.io/highlights/hlt_xyz789 \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "success": true,
+  "message": "Highlight deleted"
+}
+```
+
+## Highlight Colors
+
+The following colors are available for highlights:
+
+| Color | Use Case |
+|-------|----------|
+| **yellow** | General important text |
+| **green** | Positive insights, agreements |
+| **blue** | Questions, things to investigate |
+| **pink** | Disagreements, concerns |
+| **purple** | Definitions, key terms |
+
+<Tip>
+Consistent color coding across your bookmarks helps with visual scanning and organization.
+</Tip>
+
+## Search by Highlight
+
+<Info>
+Pro users can search across all their highlights using the `/search` endpoint with the `type=highlight` parameter.
+</Info>
+
+## Related Endpoints
+
+- [Get Bookmarks](/api/bookmarks/get) - Retrieve bookmarks with highlights
+- [Search](/api/search/bookmarks) - Search through highlighted text

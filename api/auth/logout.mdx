@@ -1,0 +1,103 @@
+---
+title: 'Logout'
+description: 'Invalidate user session and tokens'
+---
+
+## POST /auth/logout
+
+Invalidate the current user's session and tokens. This endpoint clears both access and refresh tokens.
+
+### Authentication
+
+Requires valid JWT access token in `Authorization` header.
+
+### Rate Limits
+
+- **15 requests per 20 minutes** per user
+
+### Request Headers
+
+```
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
+### Request Body
+
+No request body required.
+
+### Success Response (200 OK)
+
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+### Error Responses
+
+<Accordion title="401 Unauthorized">
+```json
+{
+  "error": "Unauthorized",
+  "message": "Invalid or expired token"
+}
+```
+</Accordion>
+
+<Accordion title="429 Too Many Requests">
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Try again later."
+}
+```
+</Accordion>
+
+## Example Requests
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.linkvite.io/auth/logout \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.linkvite.io/auth/logout', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`
+  }
+});
+
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.linkvite.io/auth/logout',
+    headers={
+        'Authorization': f'Bearer {access_token}'
+    }
+)
+
+data = response.json()
+```
+</CodeGroup>
+
+## Notes
+
+<Info>
+After logout, both the access token and refresh token become invalid and cannot be used for further requests.
+</Info>
+
+<Tip>
+For complete session cleanup, make sure to also clear tokens from local storage or cookies on the client side.
+</Tip>
+
+## Related Endpoints
+
+- [Login](/api/auth/login) - Authenticate user
+- [Refresh Token](/api/auth/refresh-token) - Renew access token

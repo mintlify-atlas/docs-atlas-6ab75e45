@@ -1,0 +1,125 @@
+---
+title: 'Get Profile'
+description: 'Retrieve public user profiles'
+---
+
+## GET /profiles/:username
+
+Get a user's public profile information including their bio, avatar, and public collection count.
+
+### Authentication
+
+No authentication required for public profiles. Optional authentication to see additional information.
+
+### Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the profile to retrieve
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  User's public identifier
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  User's username
+</ResponseField>
+
+<ResponseField name="display_name" type="string">
+  User's display name
+</ResponseField>
+
+<ResponseField name="bio" type="string">
+  User's biography text
+</ResponseField>
+
+<ResponseField name="avatar" type="string">
+  URL to user's avatar image
+</ResponseField>
+
+<ResponseField name="public_collection_count" type="integer">
+  Number of public collections
+</ResponseField>
+
+<ResponseField name="is_private" type="boolean">
+  Whether the profile is set to private
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  Profile creation timestamp
+</ResponseField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/profiles/johndoe
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "id": "usr_abc123xyz",
+  "username": "johndoe",
+  "display_name": "John Doe",
+  "bio": "Designer and bookmark enthusiast",
+  "avatar": "https://storage.linkvite.io/avatars/usr_abc123xyz.jpg",
+  "public_collection_count": 12,
+  "is_private": false,
+  "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
+### Error Responses
+
+<Accordion title="404 Not Found">
+```json
+{
+  "error": "Not Found",
+  "message": "User not found"
+}
+```
+</Accordion>
+
+---
+
+## POST /profiles/:username/like
+
+Toggle like on a user's profile. Requires authentication.
+
+### Authentication
+
+Requires valid JWT access token.
+
+### Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the profile to like/unlike
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/profiles/johndoe/like \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "success": true,
+  "liked": true
+}
+```
+
+<Info>
+The `liked` field indicates the new like state. `true` means the profile is now liked, `false` means it was unliked.
+</Info>
+
+## Related Endpoints
+
+- [Get Profile Collections](/api/profiles/collections) - List user's public collections
+- [Get User](/api/users/get) - Get current authenticated user details

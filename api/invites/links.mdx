@@ -1,0 +1,279 @@
+---
+title: 'Invite Links'
+description: 'Create and manage shareable invite links for collections'
+---
+
+## Overview
+
+Invite links are shareable URLs that allow anyone with the link to join a collection. They can have expiration dates and usage limits.
+
+## GET /invite-links/:id
+
+Get details of a specific invite link. This endpoint is public.
+
+### Authentication
+
+No authentication required.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The invite link ID
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  Invite link identifier
+</ResponseField>
+
+<ResponseField name="collection_id" type="string">
+  Associated collection ID
+</ResponseField>
+
+<ResponseField name="collection_name" type="string">
+  Name of the collection
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  Role that will be assigned: "admin" or "viewer"
+</ResponseField>
+
+<ResponseField name="expires_at" type="string">
+  Expiration timestamp (null if no expiration)
+</ResponseField>
+
+<ResponseField name="max_uses" type="integer">
+  Maximum number of uses (null if unlimited)
+</ResponseField>
+
+<ResponseField name="uses" type="integer">
+  Current number of uses
+</ResponseField>
+
+<ResponseField name="is_active" type="boolean">
+  Whether the link is still active
+</ResponseField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/invite-links/link_abc123xyz
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "id": "link_abc123xyz",
+  "collection_id": "col_xyz789",
+  "collection_name": "Team Resources",
+  "role": "viewer",
+  "expires_at": "2024-12-31T23:59:59Z",
+  "max_uses": 50,
+  "uses": 12,
+  "is_active": true
+}
+```
+
+---
+
+## POST /invite-links
+
+Create a new invite link for a collection.
+
+### Authentication
+
+Requires valid JWT access token with `invite_link:write` scope.
+Must be a collection admin.
+
+### Request Body
+
+<ParamField body="collection_id" type="string" required>
+  The collection ID to create the invite link for
+</ParamField>
+
+<ParamField body="role" type="string" required>
+  Role to assign to users who join via this link: "admin" or "viewer"
+</ParamField>
+
+<ParamField body="expires_at" type="string">
+  Optional expiration timestamp (ISO 8601 format)
+</ParamField>
+
+<ParamField body="max_uses" type="integer">
+  Optional maximum number of uses (null for unlimited)
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/invite-links \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "collection_id": "col_xyz789",
+    "role": "viewer",
+    "expires_at": "2024-12-31T23:59:59Z",
+    "max_uses": 50
+  }'
+```
+
+### Success Response (201 Created)
+
+```json
+{
+  "id": "link_abc123xyz",
+  "collection_id": "col_xyz789",
+  "role": "viewer",
+  "expires_at": "2024-12-31T23:59:59Z",
+  "max_uses": 50,
+  "uses": 0,
+  "is_active": true,
+  "url": "https://app.linkvite.io/invite/link_abc123xyz"
+}
+```
+
+---
+
+## POST /invite-links/:id
+
+Accept an invite link and join the collection.
+
+### Authentication
+
+Requires valid JWT access token with `invite_link:edit` scope.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The invite link ID
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X POST https://api.linkvite.io/invite-links/link_abc123xyz \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "success": true,
+  "message": "Successfully joined collection",
+  "collection_id": "col_xyz789",
+  "role": "viewer"
+}
+```
+
+### Error Responses
+
+<Accordion title="410 Gone - Link Expired">
+```json
+{
+  "error": "Gone",
+  "message": "This invite link has expired"
+}
+```
+</Accordion>
+
+<Accordion title="422 Unprocessable Entity - Max Uses Reached">
+```json
+{
+  "error": "Unprocessable Entity",
+  "message": "This invite link has reached its maximum number of uses"
+}
+```
+</Accordion>
+
+---
+
+## PATCH /invite-links/:id
+
+Update an existing invite link.
+
+### Authentication
+
+Requires valid JWT access token with `invite_link:edit` scope.
+Must be a collection admin.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The invite link ID
+</ParamField>
+
+### Request Body
+
+<ParamField body="expires_at" type="string">
+  New expiration timestamp
+</ParamField>
+
+<ParamField body="max_uses" type="integer">
+  New maximum number of uses
+</ParamField>
+
+<ParamField body="is_active" type="boolean">
+  Enable or disable the link
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X PATCH https://api.linkvite.io/invite-links/link_abc123xyz \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "is_active": false
+  }'
+```
+
+---
+
+## DELETE /invite-links/:id
+
+Delete an invite link permanently.
+
+### Authentication
+
+Requires valid JWT access token with `invite_link:delete` scope.
+Must be a collection admin.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The invite link ID to delete
+</ParamField>
+
+### Example Request
+
+```bash cURL
+curl -X DELETE https://api.linkvite.io/invite-links/link_abc123xyz \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "success": true,
+  "message": "Invite link deleted"
+}
+```
+
+## Best Practices
+
+<Tip>
+Set expiration dates and usage limits on invite links to maintain control over who can access your collections.
+</Tip>
+
+<Warning>
+Deactivate or delete invite links if they've been shared publicly and you want to restrict access.
+</Warning>
+
+## Related Endpoints
+
+- [Manage Invites](/api/invites/manage) - Handle direct user invitations
+- [Collection Members](/api/collections/members) - Manage collection members

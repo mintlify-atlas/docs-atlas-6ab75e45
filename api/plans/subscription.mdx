@@ -1,0 +1,161 @@
+---
+title: 'Subscription Management'
+description: 'Manage user subscriptions and billing'
+---
+
+## GET /plans
+
+Get the current user's subscription information.
+
+### Authentication
+
+Requires valid JWT access token with `plan:read` scope.
+
+### Response
+
+<ResponseField name="plan" type="string">
+  Current plan: "free", "pro", or "enterprise"
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Subscription status: "active", "canceled", "past_due", "trialing"
+</ResponseField>
+
+<ResponseField name="stripe_customer_id" type="string">
+  Stripe customer identifier
+</ResponseField>
+
+<ResponseField name="stripe_subscription_id" type="string">
+  Stripe subscription identifier
+</ResponseField>
+
+<ResponseField name="current_period_end" type="string">
+  Subscription end date (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="cancel_at_period_end" type="boolean">
+  Whether subscription will cancel at period end
+</ResponseField>
+
+<ResponseField name="storage_limit" type="integer">
+  Storage limit in bytes (200MB for free, 1GB for pro)
+</ResponseField>
+
+<ResponseField name="storage_used" type="integer">
+  Current storage usage in bytes
+</ResponseField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/plans \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "plan": "pro",
+  "status": "active",
+  "stripe_customer_id": "cus_abc123xyz",
+  "stripe_subscription_id": "sub_xyz789abc",
+  "current_period_end": "2024-04-01T00:00:00Z",
+  "cancel_at_period_end": false,
+  "storage_limit": 1073741824,
+  "storage_used": 524288000
+}
+```
+
+---
+
+## GET /plans/billing-portal
+
+Get a Stripe billing portal session URL for managing subscription.
+
+### Authentication
+
+Requires valid JWT access token with `plan:read` scope.
+
+### Query Parameters
+
+<ParamField query="return_url" type="string">
+  URL to return to after managing billing (defaults to app homepage)
+</ParamField>
+
+### Response
+
+<ResponseField name="url" type="string">
+  Stripe billing portal URL
+</ResponseField>
+
+### Example Request
+
+```bash cURL
+curl https://api.linkvite.io/plans/billing-portal?return_url=https://app.linkvite.io/settings \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Success Response (200 OK)
+
+```json
+{
+  "url": "https://billing.stripe.com/session/xyz789abc"
+}
+```
+
+<Info>
+Redirect users to this URL to allow them to:
+- Update payment methods
+- View invoices
+- Cancel or reactivate subscriptions
+- Upgrade or downgrade plans
+</Info>
+
+## Plan Limits
+
+### Free Plan
+
+- 200 MB storage
+- Basic features
+- Rate limiting
+
+### Pro Plan ($9.99/month)
+
+- 1 GB storage
+- RSS feed aggregation
+- Text highlights
+- Advanced search with Tenor and Unsplash
+- Archive feature
+- Priority support
+
+### Enterprise Plan (Custom pricing)
+
+- Unlimited storage
+- Custom integrations
+- SSO support
+- Dedicated support
+- SLA guarantees
+
+<Tip>
+Users can check their current plan and limits using the `GET /plans` endpoint before attempting premium features.
+</Tip>
+
+## Webhooks
+
+Cultus listens for the following Stripe webhook events at `POST /webhooks/stripe`:
+
+- `customer.subscription.created` - New subscription
+- `customer.subscription.updated` - Plan change or renewal
+- `customer.subscription.deleted` - Cancellation
+- `invoice.payment_succeeded` - Successful payment
+- `invoice.payment_failed` - Failed payment
+
+<Warning>
+The webhook endpoint is only accessible by Stripe. Do not call it directly.
+</Warning>
+
+## Related Endpoints
+
+- [Get User](/api/users/get) - View current user account type
+- [Get Storage](/api/users/storage) - Check storage usage details
